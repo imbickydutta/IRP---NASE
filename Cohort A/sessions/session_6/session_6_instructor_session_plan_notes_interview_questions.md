@@ -151,7 +151,7 @@ Guide them toward:
 1. Knowledge base: a JavaScript array of objects with title and content
 2. Keyword search function: loops through notes, matches keywords from the user's question
 3. Retrieve best match: pick the note with the highest keyword overlap
-4. AI call: pass the retrieved note's content as context in the prompt
+4. AI call: pass the retrieved note's content as context in the prompt (Gemini 1.5 Flash via @google/generative-ai — free tier)
 5. Display: answer, source note title, and fallback message
 
 ### Instructor Explanation
@@ -181,7 +181,7 @@ Point out the key sections in Prompt 1:
 
 - Does the knowledge base contain 10–15 meaningful notes on AI, interview, and technical topics?
 - Does the search function loop through notes and match keywords?
-- Does the AI call receive the retrieved note's content as part of the prompt?
+- Does the AI call (Gemini 1.5 Flash via @google/generative-ai — free tier) receive the retrieved note's content as part of the prompt?
 - Does the prompt instruct the AI to answer only from the provided note?
 - Is the source note title displayed alongside the answer?
 - Is there a fallback message when no note matches?
@@ -548,3 +548,13 @@ If the AI tool fails to generate the feature correctly or student setup issues c
 4. Students use Prompt 1 and Prompt 3 (debugging prompt) to regenerate or fix their own version after class.
 5. Do not sacrifice the Concept Pause segment — the RAG explanation is the most important learning of this session.
 6. If time runs short, skip the improvement round (65–80 min) and go directly to Concept Pause after the walkthrough.
+
+## Gemini API Key Troubleshooting
+
+If AI calls fail during the session:
+
+- Check that the `.env` file exists in the project root (same folder as `package.json`) and contains the line: `VITE_GEMINI_API_KEY=your_key_here`
+- Remind students to restart the Vite dev server after adding or editing the `.env` file — environment variables are not hot-reloaded
+- Confirm the import in the component uses `import.meta.env.VITE_GEMINI_API_KEY` (not `process.env`)
+- Free tier limit is 15 RPM (requests per minute) — if a student hits the rate limit, wait 1 minute and try again
+- Keys are obtained free at aistudio.google.com with a standard Google account — no credit card required

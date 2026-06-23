@@ -13,7 +13,7 @@ By the end of all sessions, the backend will:
 - accept and persist support tickets via REST API (Session 1)
 - store tickets in a SQLite database using SQLModel ORM (Session 2)
 - authenticate users and enforce role-based access with JWT (Session 3)
-- classify tickets into categories using an OpenAI LLM (Session 4)
+- classify tickets into categories using a Gemini LLM (Session 4)
 - retrieve relevant knowledge base docs via ChromaDB and generate RAG responses (Session 5)
 - orchestrate the full workflow as a LangGraph StateGraph with conditional routing (Session 6)
 - evaluate response quality and add guardrails with pytest evals (Session 7)
@@ -64,7 +64,7 @@ LangGraph StateGraph (app/services/agent.py)
       v
 [classify_node]
       | calls classify_ticket() from app/services/classifier.py
-      | OpenAI Chat Completion (GPT-4 / GPT-3.5)
+      | Gemini API (gemini-1.5-flash)
       | returns {"classification": "billing"}
       v
 [retrieve_node]
@@ -74,7 +74,7 @@ LangGraph StateGraph (app/services/agent.py)
       v
 [generate_node]
       | calls generate_response() from app/services/rag.py
-      | OpenAI Chat Completion with retrieved docs as context
+      | Gemini API (gemini-1.5-flash) with retrieved docs as context
       | produces confidence_score via LLM or heuristic
       | returns {"suggested_response": "...", "confidence_score": 0.85}
       v
@@ -130,7 +130,7 @@ A pipeline is a fixed function sequence with no framework. A chain (like LangCha
 
 A design pattern where an AI system produces a candidate output but does not act on it autonomously until a human approves it. In Session 6, the `needs_human_review` flag signals that the suggested response requires human approval before being sent to a customer. This is the responsible default for AI systems generating customer-facing text.
 
-**8. OpenAI Chat Completions and Confidence Estimation**
+**8. Gemini API and Confidence Estimation**
 
 The `generate_node` needs to produce a `confidence_score`. This can be done by prompting the LLM to rate its own confidence as a float (e.g., "Rate your confidence in this response from 0.0 to 1.0"), or by using a heuristic like response length or retrieval match count. Understand the limitations: LLM self-reported confidence is calibrated imperfectly — a confident-sounding model may still be wrong.
 
@@ -145,6 +145,8 @@ Run this in your project virtual environment before the session:
 ```bash
 pip install langgraph
 pip install langgraph-checkpoint
+pip install google-generativeai
+pip install sentence-transformers
 ```
 
 Verify the installation:
@@ -160,14 +162,14 @@ If this prints `LangGraph OK`, you are ready.
 Your `.env` file should already have these from Sessions 4 and 5:
 
 ```
-OPENAI_API_KEY=sk-...
+GEMINI_API_KEY=your_gemini_api_key_here
 DATABASE_URL=sqlite:///./support_tickets.db
 SECRET_KEY=your-jwt-secret-key
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 ```
 
-No new environment variables are required for Session 6.
+Get your free Gemini API key at aistudio.google.com (no credit card required). No new environment variables are required for Session 6 beyond what was set up in Session 4.
 
 ## Code State from Last Session
 
@@ -217,14 +219,14 @@ Body: I see two charges of $29.99 on my credit card statement from your company 
 
 # Prompts for Session 6
 
-Use these prompts during the session when instructed. All prompts are written for Claude Code or Cursor AI.
+Use these prompts during the session when instructed. All prompts are written for Antigravity.
 
 ---
 
 ## Prompt 1: Main Build Prompt
 
 ```text
-I am building an AI Support Ticket Resolution Copilot using FastAPI, SQLModel, LangGraph, and OpenAI.
+I am building an AI Support Ticket Resolution Copilot using FastAPI, SQLModel, LangGraph, and Gemini.
 
 Current project structure:
 - app/main.py — FastAPI app, router includes
@@ -302,7 +304,7 @@ Constraints:
 - Do NOT send responses automatically to customers — return result only
 - Add code comments to every node explaining: what it reads from state, what it calls, what it returns
 
-Update requirements.txt to include langgraph.
+Update requirements.txt to include langgraph, google-generativeai, and sentence-transformers.
 ```
 
 ---
@@ -442,7 +444,7 @@ Write tests for the following:
    - Assert result == {"classification": "billing"}
 
 2. test_classify_node_handles_exception:
-   - Mock classify_ticket() to raise Exception("OpenAI timeout")
+   - Mock classify_ticket() to raise Exception("Gemini API timeout")
    - Call classify_node({"ticket_id": 1, "ticket_text": "..."})
    - Assert result == {"classification": "unknown"}
 
@@ -474,7 +476,7 @@ Write tests for the following:
    - POST /tickets/9999/resolve with valid JWT
    - Assert response.status_code == 404
 
-Use unittest.mock.patch for all external calls. Do not make real OpenAI or ChromaDB calls in tests.
+Use unittest.mock.patch for all external calls. Do not make real Gemini API or ChromaDB calls in tests.
 ```
 
 ---
@@ -508,7 +510,7 @@ Handle the following cases:
    - Wrap graph.invoke() in try/except Exception and return 500 with detail if the graph raises an unhandled error
    - Validate that all required fields are present in the final state before constructing the response; if any are missing, set safe defaults (None for optional fields, False for needs_human_review)
 
-After adding error handling, explain what the system's behavior is if the OpenAI API is completely unavailable. What does the endpoint return?
+After adding error handling, explain what the system's behavior is if the Gemini API is completely unavailable. What does the endpoint return?
 ```
 
 ---
@@ -533,7 +535,7 @@ By the end of the session, you should be able to answer these questions without 
 
 8. What is the human-in-the-loop pattern? When should `needs_human_review` be True in this system?
 
-9. What happens to the endpoint response if the OpenAI API is unavailable during a `POST /tickets/{id}/resolve` call?
+9. What happens to the endpoint response if the Gemini API is unavailable during a `POST /tickets/{id}/resolve` call?
 
 10. How does Session 6 prove the value of separating service functions from route handlers (the architecture decision made in Sessions 4 and 5)?
 

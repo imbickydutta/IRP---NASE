@@ -54,7 +54,7 @@ Session 3: Auth + RBAC
   Protected routes now require: Authorization: Bearer <JWT>
 
 Session 4: LLM Classifier
-  POST /tickets/{id}/classify  → Call OpenAI, return category + confidence
+  POST /tickets/{id}/classify  → Call Gemini API, return category + confidence
   app/services/classifier.py   → classify_ticket(ticket_text: str) -> dict
 
 Session 5: RAG Knowledge Base
@@ -146,9 +146,9 @@ I added a LangGraph agentic workflow to the AI Support Ticket Resolution Copilot
 4. The handler constructs the initial state dict with ticket_id and ticket_text populated. ticket_text is assembled as f"{ticket.title}. {ticket.body}". All other state fields are set to None.
 
 5. ticket_graph.invoke(initial_state) is called. LangGraph executes the graph synchronously:
-   a. classify_node runs: calls classify_ticket(state["ticket_text"]) via OpenAI Chat Completion, returns {"classification": "billing"}. State is now: {..., "classification": "billing"}.
+   a. classify_node runs: calls classify_ticket(state["ticket_text"]) via Gemini API (gemini-1.5-flash), returns {"classification": "billing"}. State is now: {..., "classification": "billing"}.
    b. retrieve_node runs: calls retrieve_docs(state["ticket_text"]) via ChromaDB cosine similarity search, returns {"retrieved_docs": ["doc chunk 1", "doc chunk 2"]}. State is now: {..., "retrieved_docs": [...]}.
-   c. generate_node runs: calls generate_response(ticket_text, retrieved_docs) via OpenAI Chat Completion, prompts LLM for confidence rating, returns {"suggested_response": "...", "confidence_score": 0.85}. State is now: {..., "suggested_response": "...", "confidence_score": 0.85}.
+   c. generate_node runs: calls generate_response(ticket_text, retrieved_docs) via Gemini API (gemini-1.5-flash), prompts LLM for confidence rating, returns {"suggested_response": "...", "confidence_score": 0.85}. State is now: {..., "suggested_response": "...", "confidence_score": 0.85}.
    d. confidence_router runs: reads float(state.get("confidence_score", 0.0)) = 0.85. 0.85 >= 0.7, returns "suggest". LangGraph follows the "suggest" edge to END, setting needs_human_review = False.
 
 6. graph.invoke() returns the final state dict. The handler extracts ticket_id, classification, suggested_response, confidence_score, needs_human_review.
@@ -255,6 +255,6 @@ In Session 7, we will add evals, guardrails, and testing to the AI Support Ticke
 
 We will write pytest tests for the LangGraph graph nodes in `tests/test_agent.py` using mocked service functions. We will add input guardrails that validate ticket text before it enters the graph — rejecting empty tickets, overly short texts, or tickets that contain personally identifiable information patterns. We will run systematic evals against a set of known ticket/response pairs to measure response quality using an LLM-as-judge approach, and we will record pass/fail results per ticket category.
 
-The main AI and technical concept for Session 7 is: how do you measure whether an LLM-powered system is working? What is an eval, what is a guardrail, and how are they different from unit tests? How do you write a pytest test for a node that calls an OpenAI API without making real API calls? How do you use LLM-as-judge to evaluate response quality at scale?
+The main AI and technical concept for Session 7 is: how do you measure whether an LLM-powered system is working? What is an eval, what is a guardrail, and how are they different from unit tests? How do you write a pytest test for a node that calls a Gemini API without making real API calls? How do you use LLM-as-judge to evaluate response quality at scale?
 
 By the end of Session 7, the AI Support Ticket Resolution Copilot will have test coverage for its agent workflow and a documented quality measurement process — which is what separates a prototype from a production-ready AI system.

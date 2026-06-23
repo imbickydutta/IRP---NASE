@@ -141,7 +141,12 @@ Complete this before the live session:
 1. Your app from Session 6 is working correctly
 2. The RAG-Lite Doubt Solver from Session 6 is functional
 3. Your profile is saved in localStorage (target role and weak areas must be filled)
-4. Your AI tool (Antigravity or equivalent) is open and ready
+4. Gemini API is set up in your project:
+   - Run in your project folder: `npm install @google/generative-ai`
+   - Create a file named `.env` in your project root (same folder as `package.json`) and add: `VITE_GEMINI_API_KEY=your_key_here`
+   - Get your free API key at: aistudio.google.com (free Google account, no credit card required)
+   - To verify the key is loading, temporarily add this line at the top of your main component: `console.log(import.meta.env.VITE_GEMINI_API_KEY)` — you should see the key in the browser console. Remove this line after verifying.
+   - Restart the Vite dev server after creating the `.env` file (`npm run dev` again)
 5. You have read the Key Concepts above
 6. You have your sample profile data ready (see Content to Prepare section below)
 7. Chrome is installed
@@ -248,6 +253,12 @@ UI Requirements:
 - Add a "Regenerate Plan" button after the first plan is shown
 - Day cards should be collapsible — show day number and topic in the header, expand to show questions and task
 - Keep the UI consistent with the rest of the app
+
+For the AI call, use the following setup:
+- Use the Gemini API via the @google/generative-ai npm package
+- API key from: import.meta.env.VITE_GEMINI_API_KEY
+- Model: gemini-1.5-flash
+- For JSON output use responseMimeType: "application/json" in generationConfig (set temperature: 0 for consistent output)
 
 Important constraints:
 - Do not add n8n, webhooks, Google Sheets export, calendar sync, email notifications, or any external integration

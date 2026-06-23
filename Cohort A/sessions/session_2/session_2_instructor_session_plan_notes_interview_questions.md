@@ -216,7 +216,7 @@ Remind students:
 ### What to Watch For After Generation
 
 - Does the JD text area appear in the app?
-- Does the Analyze JD button call an AI function?
+- Does the Analyze JD button call an AI function? (Gemini 1.5 Flash via @google/generative-ai — free tier)
 - Does the AI prompt inside the code ask for JSON output with the correct keys?
 - Does the app parse the returned JSON?
 - Does each result card appear with data?
@@ -447,7 +447,7 @@ Make sure your Session 2 feature works and the extracted JD data is accessible i
 
 ## What to Emphasize
 
-Session 2 introduces the first real AI call in the app.
+Session 2 introduces the first real AI call in the app. (Gemini 1.5 Flash via @google/generative-ai — free tier)
 
 Students should understand:
 
@@ -625,3 +625,13 @@ If the AI tool generation fails or the JSON parsing has major issues:
 5. Do not sacrifice the Concept Pause — structured prompting explanation is the most important learning of Session 2.
 6. If AI keeps returning prose, demonstrate the prompt fix live: add "Return only the JSON object. Do not include any explanation or markdown formatting."
 7. The interview explanation section must always run, even if the code is not fully working.
+
+## Gemini API Troubleshooting
+
+If AI calls are failing during the session:
+
+- Check that the student's `.env` file exists in the project root (same folder as `package.json`) and contains `VITE_GEMINI_API_KEY=...` with a real key
+- The Vite dev server must be restarted after adding or changing the `.env` file — stopping and re-running `npm run dev` is required
+- Confirm the key is accessible: `console.log(import.meta.env.VITE_GEMINI_API_KEY)` in the component should print the key, not `undefined`
+- Free tier limit is 15 RPM (requests per minute) — if a student hits the rate limit, wait 1 minute and try again
+- If the key returns a 403 or "API key not valid" error, the student needs to generate a new key at https://aistudio.google.com

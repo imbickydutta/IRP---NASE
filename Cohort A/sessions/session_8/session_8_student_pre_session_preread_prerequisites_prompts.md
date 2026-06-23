@@ -135,6 +135,28 @@ Complete this before Session 8:
 5. Have your profile data filled and saved in the app
 6. Have a sample JD pasted and saved in the JD analyzer
 
+## Gemini API Setup (if not already done from a previous session)
+
+This app calls the Gemini API directly from the browser. If your AI calls are not working, follow these steps:
+
+1. Install the package:
+   ```
+   npm install @google/generative-ai
+   ```
+2. Create a `.env` file in your project root (same folder as `package.json`) and add:
+   ```
+   VITE_GEMINI_API_KEY=your_key_here
+   ```
+3. Get a free API key from [aistudio.google.com](https://aistudio.google.com) — requires a Google account, no credit card needed.
+4. Restart the Vite dev server after adding the `.env` file.
+5. Verify the key is loaded by adding this line temporarily at the top of any component:
+   ```js
+   console.log(import.meta.env.VITE_GEMINI_API_KEY)
+   ```
+   You should see your key in the browser console. Remove this line after verifying.
+
+Note: The `VITE_` prefix exposes the key to the browser. This is acceptable for a classroom project but should not be used in production apps.
+
 ## Optional Setup
 
 Useful but not mandatory:
@@ -198,6 +220,12 @@ Use this to ask AI to review your complete app for bugs, gaps, and missing state
 
 ```text
 You are a senior engineer reviewing a student project called AI Interview Prep Copilot.
+
+The app is a React frontend-only app (no backend). It uses the Gemini API directly from the browser:
+- Use the Gemini API via @google/generative-ai npm package
+- API key from: import.meta.env.VITE_GEMINI_API_KEY
+- Model: gemini-1.5-flash
+- For JSON output use responseMimeType: "application/json" in generationConfig
 
 The app has 7 features:
 1. Base Profile Dashboard — collects name, target role, skills, project details, weak areas, and job description. Saves to localStorage.

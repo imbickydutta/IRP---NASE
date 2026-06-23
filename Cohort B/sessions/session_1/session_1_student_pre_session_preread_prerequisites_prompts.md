@@ -13,7 +13,7 @@ By the end of all 8 sessions, the system will be able to:
 - accept and store support tickets via a REST API
 - persist tickets in a PostgreSQL database with proper schema
 - authenticate API requests using JWT tokens
-- auto-categorize and prioritize tickets using OpenAI
+- auto-categorize and prioritize tickets using Gemini
 - search for similar past tickets using semantic embeddings in ChromaDB
 - retrieve solution suggestions using LangChain RAG
 - autonomously resolve tickets using a LangGraph agent
@@ -41,7 +41,7 @@ By the end of Session 1, you will have:
 
 ## Why Are We Adding This Feature at This Point in the Build?
 
-Every layer we add in this program depends on the layer below it. The REST API is the foundational contract — it defines what data the system accepts, what it returns, and how clients interact with it. Before we can add a database, we need to know what fields a ticket has. Before we can add JWT auth, we need routes to protect. Before we can call OpenAI, we need a ticket object to send to it.
+Every layer we add in this program depends on the layer below it. The REST API is the foundational contract — it defines what data the system accepts, what it returns, and how clients interact with it. Before we can add a database, we need to know what fields a ticket has. Before we can add JWT auth, we need routes to protect. Before we can call the Gemini API, we need a ticket object to send to it.
 
 Starting with the API also forces us to make explicit data model decisions early: What fields does a ticket need? Which fields does the server control vs the client? What does a valid vs invalid request look like? These decisions are much cheaper to change now than after we have a database schema, migrations, and downstream AI code depending on them.
 
@@ -77,12 +77,12 @@ JWT Middleware  →  OAuth2PasswordBearer  →  Protected Routes
         [Session 4 adds ↓]
         v
 Session 4 — LLM Integration
-OpenAI API  →  Auto-categorize + prioritize ticket
+Gemini API (gemini-1.5-flash)  →  Auto-categorize + prioritize ticket
         |
         [Session 5 adds ↓]
         v
 Session 5 — Semantic Search
-OpenAI Embeddings  →  ChromaDB  →  Similarity Search
+sentence-transformers embeddings  →  ChromaDB  →  Similarity Search
         |
         [Session 6 adds ↓]
         v
@@ -161,14 +161,14 @@ python -c "import fastapi; print(fastapi.__version__)"
 python -c "import uvicorn; print(uvicorn.__version__)"
 ```
 
-You do not need any database drivers, OpenAI SDK, or LangChain for Session 1.
+You do not need any database drivers, google-generativeai, or LangChain for Session 1.
 
 ## Environment Setup
 
 1. Python 3.11 or higher installed (check: `python --version`)
-2. A code editor: VS Code, PyCharm, or any editor that works with Claude Code / Cursor
+2. A code editor: VS Code, PyCharm, or any editor that works with Antigravity
 3. Terminal access (not just an IDE terminal — a standalone terminal is useful for running `uvicorn`)
-4. Claude Code CLI or Cursor IDE installed and authenticated
+4. Antigravity installed and ready
 5. A browser for testing Swagger at `http://localhost:8000/docs`
 
 ## Code State From the Previous Session
@@ -221,7 +221,7 @@ What NOT to build in Session 1:
 
 # Prompts for Session 1
 
-Use these prompts during the session when instructed by your instructor. All prompts are designed for Claude Code or Cursor AI coding tools.
+Use these prompts during the session when instructed by your instructor. All prompts are designed for Antigravity coding tools.
 
 ---
 

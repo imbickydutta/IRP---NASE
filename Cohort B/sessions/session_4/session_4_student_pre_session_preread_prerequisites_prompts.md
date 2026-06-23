@@ -37,7 +37,7 @@ Add LLM-powered ticket classification to the `POST /tickets` flow.
 
 When a ticket is created, the backend:
 1. Saves the ticket to the DB
-2. Calls an LLM (OpenAI or Ollama) with the ticket content
+2. Calls an LLM (Gemini 1.5 Flash) with the ticket content
 3. Receives structured JSON classification output
 4. Stores the classification in a new `TicketClassification` table
 5. Returns the classification alongside the ticket in the response
@@ -108,9 +108,9 @@ Client Request
      |
      v
 [LLM Classifier: app/services/llm_classifier.py]  <-- NEW in Session 4
-  - OpenAI Chat Completions API called
+  - Gemini 1.5 Flash API called via google-generativeai
   - System prompt requests structured JSON
-  - response_format={"type": "json_object"}
+  - response_mime_type="application/json" in GenerationConfig
   - temperature=0.1
      |
      +-- success --> [Parse JSON] --> [Save TicketClassification row]
@@ -135,42 +135,46 @@ Client Request
 
 ## Key Concepts to Revise Before Session 4
 
-**1. OpenAI Chat Completions API (`openai` Python library)**
+**1. Gemini API (`google-generativeai` Python library)**
 
-The `openai` library (v1.x+) provides the `OpenAI` client class. The key call is:
+The `google-generativeai` library provides the `genai` module. The key pattern is:
 
 ```python
-from openai import OpenAI
-client = OpenAI()  # reads OPENAI_API_KEY from environment automatically
-response = client.chat.completions.create(
-    model="gpt-4o-mini",
-    messages=[...],
-    temperature=0.1,
-    response_format={"type": "json_object"}
+import google.generativeai as genai
+import json, os
+
+genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+model = genai.GenerativeModel(
+    "gemini-1.5-flash",
+    generation_config=genai.GenerationConfig(
+        response_mime_type="application/json",
+        temperature=0.1
+    )
 )
-content = response.choices[0].message.content  # this is a JSON string
+response = model.generate_content(prompt)
+result = json.loads(response.text)  # response.text is the JSON string
 ```
 
-Know this call signature. Know that `response.choices[0].message.content` is a string, not a dict — you must call `json.loads()` on it.
+Know this call pattern. Know that `response.text` is a string, not a dict — you must call `json.loads()` on it.
 
-**2. JSON Mode (`response_format={"type": "json_object"}`)**
+**2. JSON Output Mode (`response_mime_type="application/json"`)**
 
-JSON mode is an OpenAI API parameter that forces the model to return valid JSON. Without it, the model might wrap the JSON in markdown (``` json ... ```), add prose before the JSON, or return partial JSON. `json.loads()` on any of those would raise a `json.JSONDecodeError`. JSON mode eliminates this class of failure. The system prompt must also say "return JSON" somewhere — the API validates this.
+Setting `response_mime_type="application/json"` inside `genai.GenerationConfig` forces the Gemini model to return valid JSON. Without it, the model might wrap the JSON in markdown (` ```json ... ``` `), add prose before the JSON, or return partial JSON. `json.loads()` on any of those would raise a `json.JSONDecodeError`. Setting `response_mime_type` eliminates this class of failure. The system prompt should still say "return JSON" somewhere for best results.
 
 **3. Temperature in LLMs**
 
-Temperature is a float parameter (typically 0–2) that controls randomness in token sampling. Low temperature (0–0.2) makes the model near-deterministic — it picks the highest-probability token almost every time. High temperature (0.7–1.0) adds randomness, generating more varied responses. For classification tasks — where you want the same input to consistently produce the same output — use `temperature=0.1` or lower.
+Temperature is a float parameter (typically 0–2) that controls randomness in token sampling. Low temperature (0–0.2) makes the model near-deterministic — it picks the highest-probability token almost every time. High temperature (0.7–1.0) adds randomness, generating more varied responses. For classification tasks — where you want the same input to consistently produce the same output — use `temperature=0.1` or lower. In Gemini, this is set inside `genai.GenerationConfig(temperature=0.1)`.
 
 **4. System Prompts and Prompt Engineering for Classification**
 
-A system message in the Chat Completions API sets the model's persistent instruction context. For classification:
+With the Gemini API, the full prompt (system instructions + user content) is passed as a single string to `model.generate_content(prompt)`. For classification:
 - Establish a role: "You are a support ticket classifier"
 - Specify exact output structure with field names
 - Enumerate allowed values for categorical fields
 - Specify types for numeric fields ("integer between 1 and 10")
 - Add a format constraint: "Return only the JSON object, no explanation"
 
-A well-designed system prompt removes ambiguity and reduces the chance of out-of-distribution outputs.
+A well-designed prompt removes ambiguity and reduces the chance of out-of-distribution outputs.
 
 **5. SQLModel Foreign Keys**
 
@@ -206,21 +210,22 @@ The ticket is committed to DB before this block. The block can fail without affe
 Never hardcode API keys. Store them in a `.env` file:
 
 ```
-OPENAI_API_KEY=sk-proj-...
+GEMINI_API_KEY=your-key-here
 ```
 
 Load them at startup:
 
 ```python
 from dotenv import load_dotenv
+import os
 load_dotenv()
 ```
 
-Add `.env` to `.gitignore`. The `openai` library reads `OPENAI_API_KEY` from the environment automatically when you instantiate `OpenAI()`.
+Add `.env` to `.gitignore`. After `load_dotenv()`, access the key with `os.environ["GEMINI_API_KEY"]` and pass it to `genai.configure(api_key=os.environ["GEMINI_API_KEY"])`. Get a free Gemini API key at aistudio.google.com — no credit card required.
 
 **8. `unittest.mock.patch` for Testing External APIs**
 
-When writing pytest tests for code that calls the OpenAI API, you must mock the API call — you do not want real API calls in your test suite. Use `unittest.mock.patch` to replace the OpenAI client method with a `MagicMock` that returns a controlled response. This keeps tests fast, deterministic, and runnable without API keys.
+When writing pytest tests for code that calls the Gemini API, you must mock the API call — you do not want real API calls in your test suite. Use `unittest.mock.patch` to replace `google.generativeai.GenerativeModel.generate_content` with a `MagicMock` that returns a controlled response object (with a `.text` attribute). This keeps tests fast, deterministic, and runnable without API keys.
 
 ---
 
@@ -229,29 +234,24 @@ When writing pytest tests for code that calls the OpenAI API, you must mock the 
 ## Python Packages to Install
 
 ```bash
-pip install openai>=1.0.0
+pip install google-generativeai
 pip install python-dotenv
 ```
 
-Verify the openai version:
+Verify the google-generativeai package is installed:
 
 ```bash
-python -c "import openai; print(openai.__version__)"
-# Should print 1.x.x or higher
+python -c "import google.generativeai as genai; print('google-generativeai installed')"
 ```
 
-If you see `0.28.x` or similar, upgrade:
-
-```bash
-pip install --upgrade openai
-```
+Get a free Gemini API key at aistudio.google.com (no credit card required).
 
 ## Environment Setup
 
 Create or update your `.env` file in the project root:
 
 ```
-OPENAI_API_KEY=sk-proj-your-actual-key-here
+GEMINI_API_KEY=your-gemini-api-key-here
 SECRET_KEY=your-jwt-secret-key
 DATABASE_URL=sqlite:///./tickets.db
 ```
@@ -269,23 +269,14 @@ If it is not there, add it now:
 echo ".env" >> .gitignore
 ```
 
-## Ollama (Optional — Local Alternative)
+## Getting a Free Gemini API Key
 
-If you do not have an OpenAI API key, install Ollama and pull a local model:
+1. Go to aistudio.google.com
+2. Sign in with a Google account
+3. Click "Get API key" → "Create API key"
+4. Copy the key and paste it into your `.env` file as `GEMINI_API_KEY=your-key-here`
 
-```bash
-# Install Ollama from https://ollama.ai
-ollama pull llama3.2
-ollama serve  # starts local server on http://localhost:11434
-```
-
-When using Ollama, initialize the OpenAI client with a custom `base_url`:
-
-```python
-client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
-```
-
-The rest of the code is identical.
+The free tier allows 15 requests per minute and 1 million tokens per day — more than sufficient for this session.
 
 ## Code State from Session 3
 
@@ -364,7 +355,7 @@ You will use these to test that the classifier correctly identifies the `categor
 
 # Prompts for Session 4
 
-Use these prompts when instructed during the session. All prompts are written for Claude Code or Cursor AI coding assistant.
+Use these prompts when instructed during the session. All prompts are written for Antigravity coding assistant.
 
 ---
 
@@ -381,7 +372,7 @@ Current project state (already built in Sessions 1–3):
 - app/routes/tickets.py: Protected CRUD routes. POST /tickets, GET /tickets, GET /tickets/{id}, PATCH /tickets/{id}, DELETE /tickets/{id}. All routes use Depends(get_current_user).
 - app/routes/auth.py: POST /auth/register and POST /auth/login. Login returns {"access_token": "...", "token_type": "bearer"}
 - app/core/auth.py: create_access_token(), decode_token(), get_current_user dependency, require_admin dependency
-- app/core/config.py: Settings loaded from environment using python-dotenv. Includes SECRET_KEY, DATABASE_URL, OPENAI_API_KEY
+- app/core/config.py: Settings loaded from environment using python-dotenv. Includes SECRET_KEY, DATABASE_URL, GEMINI_API_KEY
 - tests/: pytest tests for auth and ticket CRUD
 
 Task for Session 4: Add LLM-powered ticket classification to the POST /tickets flow.
@@ -395,10 +386,9 @@ NEW FILE: app/models/ticket_classification.py
 
 NEW FILE: app/services/llm_classifier.py
 - Function: classify_ticket(title: str, description: str) -> Optional[dict]
-- Initializes OpenAI client reading OPENAI_API_KEY from environment (do NOT hardcode the key)
-- Uses model "gpt-4o-mini"
-- Sets temperature=0.1
-- Sets response_format={"type": "json_object"}
+- Uses google-generativeai: import google.generativeai as genai
+- Calls genai.configure(api_key=os.environ["GEMINI_API_KEY"]) — do NOT hardcode the key
+- Creates model with genai.GenerativeModel("gemini-1.5-flash", generation_config=genai.GenerationConfig(response_mime_type="application/json", temperature=0.1))
 - System prompt must instruct the model to return a JSON object with exactly these fields:
     category: one of Billing, Technical, Account, General
     priority: one of Low, Medium, High, Critical
@@ -407,7 +397,8 @@ NEW FILE: app/services/llm_classifier.py
     summary: one sentence description under 20 words
     suggested_team: one of Billing Support, Tech Support, Account Team
 - System prompt must say "Return only the JSON object. No explanation, no markdown."
-- User message should include the ticket title and description clearly labeled
+- Prompt should include the ticket title and description clearly labeled
+- Calls model.generate_content(prompt) and parses with json.loads(response.text)
 - Wraps the entire API call and json.loads() in try/except
 - On any exception: logs a warning with the error details and returns None
 - On success: returns the parsed dict
@@ -428,18 +419,18 @@ MODIFY or CREATE: app/schemas/ticket.py (or update app/models/ticket.py)
 - Use this as the response_model for POST /tickets
 
 Constraints:
-- Do NOT add streaming (stream=True)
+- Do NOT add streaming
 - Do NOT add LangChain, LangGraph, or any agent framework
 - Do NOT add a separate /classify endpoint
 - Do NOT add async LLM calls or background tasks
 - Do NOT add multiple LLM providers or provider switching
 - Do NOT modify the JWT auth system or any existing auth logic
 - Do NOT add Alembic migrations — rely on SQLModel.metadata.create_all(engine) for table creation
-- Do NOT use openai version 0.x API style (no openai.ChatCompletion.create) — use the openai v1.x client pattern: client = OpenAI(); client.chat.completions.create(...)
+- Do NOT use the openai package — use google-generativeai exclusively
 
 Add clear inline comments explaining:
 - Why the ticket is committed before the LLM call
-- Why response_format={"type": "json_object"} is used
+- Why response_mime_type="application/json" is used in the GenerationConfig
 - Why temperature is set low
 - What the try/except block is protecting against
 - How the classification is linked to the ticket via ticket_id
@@ -456,10 +447,10 @@ Apply these specific improvements:
 
 1. In llm_classifier.py:
    - Replace bare "except Exception" with specific exception handling in this order:
-     a. except openai.AuthenticationError
-     b. except openai.RateLimitError
-     c. except openai.APITimeoutError
-     d. except openai.APIConnectionError
+     a. except google.api_core.exceptions.PermissionDenied
+     b. except google.api_core.exceptions.ResourceExhausted
+     c. except google.api_core.exceptions.DeadlineExceeded
+     d. except google.api_core.exceptions.ServiceUnavailable
      e. except json.JSONDecodeError
      f. except Exception (catch-all last)
    - Each except block should log a warning with the specific error type and message
@@ -492,7 +483,7 @@ SYMPTOM A: POST /tickets returns 422 Unprocessable Entity after I added the clas
 - The request body is valid (same body that worked before Session 4 changes)
 - The error response body contains validation errors about the response model
 
-SYMPTOM B: POST /tickets returns 201 but the classification fields are always null, even though OPENAI_API_KEY is set correctly.
+SYMPTOM B: POST /tickets returns 201 but the classification fields are always null, even though GEMINI_API_KEY is set correctly.
 - Running classify_ticket() directly in a Python shell works fine
 - The issue is in how classify_ticket is called from the route handler
 
@@ -572,17 +563,17 @@ Project context:
 Generate the following tests:
 
 tests/test_classifier.py:
-1. test_classify_ticket_success: Mock openai client.chat.completions.create to return a valid JSON response with all six fields. Assert that classify_ticket returns a dict with correct values.
-2. test_classify_ticket_returns_none_on_auth_error: Mock the API call to raise openai.AuthenticationError. Assert that classify_ticket returns None (does not raise).
-3. test_classify_ticket_returns_none_on_rate_limit: Mock to raise openai.RateLimitError. Assert returns None.
-4. test_classify_ticket_returns_none_on_malformed_json: Mock the API to return a response where message.content is "not valid json". Assert returns None.
+1. test_classify_ticket_success: Mock google.generativeai.GenerativeModel.generate_content to return a MagicMock with .text set to a valid JSON string with all six fields. Assert that classify_ticket returns a dict with correct values.
+2. test_classify_ticket_returns_none_on_auth_error: Mock the API call to raise google.api_core.exceptions.PermissionDenied. Assert that classify_ticket returns None (does not raise).
+3. test_classify_ticket_returns_none_on_rate_limit: Mock to raise google.api_core.exceptions.ResourceExhausted. Assert returns None.
+4. test_classify_ticket_returns_none_on_malformed_json: Mock the API to return a MagicMock where .text is "not valid json". Assert returns None.
 5. test_classify_ticket_returns_none_for_empty_input: Call classify_ticket("", "") directly (no mock needed if input validation returns None early). Assert returns None.
 
 tests/test_tickets.py (add to existing file):
 6. test_post_ticket_with_classification: Mock classify_ticket to return a valid classification dict. Call POST /tickets with a valid auth token. Assert response is 201, response body includes "classification" key with correct fields.
 7. test_post_ticket_classification_null_when_llm_fails: Mock classify_ticket to return None. Call POST /tickets. Assert response is still 201, response body has "classification": null.
 
-Use unittest.mock.patch for all mocks. Use the existing conftest.py fixtures for the FastAPI test client and auth tokens. Add comments explaining what each test is verifying and why.
+Use unittest.mock.patch for all mocks. Target "google.generativeai.GenerativeModel.generate_content" as the patch path. Use the existing conftest.py fixtures for the FastAPI test client and auth tokens. Add comments explaining what each test is verifying and why.
 
 Do NOT add tests that make real API calls. Do NOT add integration tests that require a running database for the mock tests.
 ```
@@ -625,21 +616,21 @@ Show exactly which lines to add or change in each file.
 
 After the session, prepare your own answers to these questions. No answers are given here — the point is to explain them in your own words, at a technical level.
 
-1. What is the Chat Completions API call structure for this classifier? What parameters are being set and why?
+1. What is the Gemini API call structure for this classifier? What parameters are being set and why?
 
-2. What is the difference between `response_format={"type": "json_object"}` and simply telling the model to "respond in JSON" in the system prompt?
+2. What is the difference between `response_mime_type="application/json"` in the `GenerationConfig` and simply telling the model to "respond in JSON" in the system prompt?
 
 3. Why is `temperature=0.1` appropriate for a classification task? What would happen at `temperature=0.9`?
 
 4. What is the exact commit order for the Ticket and TicketClassification rows, and why does that order matter for data integrity?
 
-5. What happens to the `POST /tickets` endpoint if `OPENAI_API_KEY` is set to an expired key and `openai.AuthenticationError` is raised?
+5. What happens to the `POST /tickets` endpoint if `GEMINI_API_KEY` is set to an expired key and `google.api_core.exceptions.PermissionDenied` is raised?
 
 6. Why is `TicketClassification` a separate SQLModel table rather than additional nullable columns on the `Ticket` table?
 
 7. If a student runs `pytest tests/ -v` and the test for `test_post_ticket_with_classification` fails with `KeyError: 'classification'`, what is the most likely cause?
 
-8. What is the risk of not including `response_format={"type": "json_object"}` in the API call, and how would `json.JSONDecodeError` surface in the current code?
+8. What is the risk of not including `response_mime_type="application/json"` in the Gemini `GenerationConfig`, and how would `json.JSONDecodeError` surface in the current code?
 
 9. How would you change the architecture if classification needed to happen asynchronously after ticket creation, without blocking the HTTP response?
 
@@ -648,5 +639,5 @@ After the session, prepare your own answers to these questions. No answers are g
 ## Final Session 4 Explanation
 
 ```text
-In Session 4, I added LLM-powered ticket classification to the POST /tickets endpoint of the AI Support Ticket Resolution Copilot. When a ticket is created, the backend calls the OpenAI Chat Completions API with a structured system prompt and response_format set to json_object mode, which guarantees the model returns valid JSON containing category, priority, sentiment, urgency_score, summary, and suggested_team fields. The classification result is stored in a dedicated TicketClassification table linked to the ticket via a foreign key, and returned alongside the ticket in the 201 response. If the LLM call fails for any reason — invalid key, rate limit, malformed response — the ticket still saves successfully and the classification fields are null, which is a graceful degradation pattern that ensures the core ticket creation feature is never blocked by an optional AI enhancement.
+In Session 4, I added LLM-powered ticket classification to the POST /tickets endpoint of the AI Support Ticket Resolution Copilot. When a ticket is created, the backend calls the Gemini 1.5 Flash API via the google-generativeai library with a structured prompt and response_mime_type="application/json" in the GenerationConfig, which guarantees the model returns valid JSON containing category, priority, sentiment, urgency_score, summary, and suggested_team fields. The classification result is stored in a dedicated TicketClassification table linked to the ticket via a foreign key, and returned alongside the ticket in the 201 response. If the LLM call fails for any reason — invalid key, rate limit, malformed response — the ticket still saves successfully and the classification fields are null, which is a graceful degradation pattern that ensures the core ticket creation feature is never blocked by an optional AI enhancement.
 ```

@@ -83,7 +83,7 @@ Protected routes, User model, role-based access
     ↓ Session 4 adds a new endpoint and background processing:
 
 Session 4 — LLM Auto-categorization
-POST /tickets/{id}/analyze → OpenAI Chat API
+POST /tickets/{id}/analyze → Gemini API (gemini-1.5-flash)
     |
     v
 Structured JSON response → update ticket category, priority, suggested_solution
@@ -91,7 +91,7 @@ Structured JSON response → update ticket category, priority, suggested_solutio
     ↓ Session 5 adds a new data layer:
 
 Session 5 — Semantic Search
-OpenAI text-embedding-3-small → ChromaDB collection
+sentence-transformers all-MiniLM-L6-v2 → ChromaDB collection
     |
     v
 POST /tickets/{id}/similar → top-k similar past tickets
@@ -99,7 +99,7 @@ POST /tickets/{id}/similar → top-k similar past tickets
     ↓ Session 6 adds retrieval-augmented generation:
 
 Session 6 — RAG Solution Retrieval
-LangChain → ChromaDB retriever → OpenAI LLM chain
+LangChain → ChromaDB retriever → Gemini API (gemini-1.5-flash) LLM chain
     |
     v
 POST /tickets/{id}/suggest-solution → cited solution from knowledge base

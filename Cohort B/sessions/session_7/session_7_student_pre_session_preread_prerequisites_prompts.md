@@ -64,7 +64,7 @@ Route Handler (app/routes/tickets.py) [Sessions 1–2]
   ↓
 Database Layer — SQLModel + SQLite (app/db/) [Session 2]
   ↓
-LLM Classifier — OpenAI chat completion (app/llm/classifier.py) [Session 4]
+LLM Classifier — Gemini API (gemini-1.5-flash) (app/llm/classifier.py) [Session 4]
   category, priority, summary extracted from ticket text
   ↓
 LangGraph Workflow (app/graph/) [Session 6]
@@ -122,9 +122,9 @@ A system prompt guardrail instructs the LLM what to avoid before it generates a 
 
 When you call `collection.query(query_embeddings=..., n_results=...)`, ChromaDB returns a `distances` list. For L2 distance, lower is more similar. For cosine distance (1 - cosine similarity), lower is also more similar. To convert a cosine distance to a similarity score: `score = 1 - distance`. When using the `cosine` metric in ChromaDB, the returned distance is already `1 - cosine_similarity`, so `score = 1 - distances[0][0]` gives you a 0–1 similarity score.
 
-### 7. `unittest.mock.patch` for mocking OpenAI calls in tests
+### 7. `unittest.mock.patch` for mocking Gemini calls in tests
 
-To avoid calling the real OpenAI API in tests, use `unittest.mock.patch` to replace the client method with a mock that returns a controlled response. The mock must return an object that matches the structure of the real response: `mock.choices[0].message.content` as a string.
+To avoid calling the real Gemini API in tests, use `unittest.mock.patch` to replace the client method with a mock that returns a controlled response. The mock must return an object that matches the structure of the real response: `mock.text` as a string (for `generate_content` responses).
 
 ### 8. Sentence-level overlap for groundedness checking
 
@@ -149,7 +149,7 @@ pip install pytest httpx pytest-asyncio
 ## Environment Setup
 
 - Python virtual environment must be activated
-- `OPENAI_API_KEY` must be set in `.env` (used by classifier and generate node)
+- `GEMINI_API_KEY` must be set in `.env` (used by classifier and generate node)
 - Run from the project root directory, not from inside `app/`
 - Set `PYTHONPATH` before running pytest:
 
@@ -224,14 +224,14 @@ You will use Samples 1–3 for the CRUD tests and the resolve endpoint tests. Yo
 
 # Prompts for Session 7
 
-Use these prompts during the session when instructed by the instructor. All prompts are written for Claude Code or Cursor.
+Use these prompts during the session when instructed by the instructor. All prompts are written for Antigravity.
 
 ---
 
 ## Prompt 1: Main Build Prompt
 
 ```text
-I am building an AI Support Ticket Resolution Copilot using FastAPI, SQLModel, LangGraph, ChromaDB, and OpenAI.
+I am building an AI Support Ticket Resolution Copilot using FastAPI, SQLModel, LangGraph, ChromaDB, and Gemini.
 
 The project already has the following built and working:
 - app/main.py — FastAPI app with lifespan, CORS, router includes
@@ -274,7 +274,7 @@ FILE 3: tests/test_classifier.py
 - Assert result["category"] is a string and is in ["billing", "technical", "account", "general"]
 - Assert result["priority"] is a string and is in ["low", "medium", "high", "urgent"]
 - Assert result["summary"] is a string with length > 0
-- Mark with pytest.mark.skipif(os.getenv("OPENAI_API_KEY") is None, reason="No API key") to skip in CI
+- Mark with pytest.mark.skipif(os.getenv("GEMINI_API_KEY") is None, reason="No API key") to skip in CI
 
 FILE 4: app/evals/__init__.py
 - Empty file
@@ -477,7 +477,7 @@ In app/evals/groundedness.py:
 4. Word overlap fraction computation should not divide by zero if a sentence has only stopwords — handle this case by returning True (marking the sentence as supported) since a stopword-only sentence has no factual claims
 
 In app/graph/nodes.py — generate_node:
-5. The LLM call could raise an openai.APIError — wrap the llm.invoke() call in try/except and return SAFE_FALLBACK_RESPONSE on any API error, log the error with Python's logging module
+5. The LLM call could raise a google.api_core.exceptions.GoogleAPIError — wrap the llm.invoke() call in try/except and return SAFE_FALLBACK_RESPONSE on any API error, log the error with Python's logging module
 6. The retrieved_chunks might be an empty list when confidence routing sends to generate_node unexpectedly — add a check: if not state.get("retrieved_chunks"): return the SAFE_FALLBACK_RESPONSE with a note in the log
 
 In tests/test_tickets.py:

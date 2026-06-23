@@ -25,7 +25,7 @@ Deployment matters because a locally-running project has a zero-person audience.
 
 Documentation matters because you will not remember how this system works in six months. More importantly, the README is what a technical interviewer reads before they talk to you. If your README clearly describes the architecture, the API, and the limitations, the interviewer starts the conversation already believing you built something real. The architecture diagram alone communicates more about your engineering competence than a verbal explanation of equal length.
 
-Environment variable management matters for security. A committed `.env` file with a real OpenAI API key exposed on GitHub can be scraped by bots in under 60 seconds. The `.env.example` pattern is a standard professional practice — the template is version-controlled, the secrets never are.
+Environment variable management matters for security. A committed `.env` file with a real Gemini API key exposed on GitHub can be scraped by bots in under 60 seconds. The `.env.example` pattern is a standard professional practice — the template is version-controlled, the secrets never are.
 
 ---
 
@@ -75,7 +75,7 @@ Guardrail Check                                        [Added: Session 7]
 LLM Ticket Classifier                                  [Added: Session 4]
   app/classifier.py
   - System prompt: classify into billing / technical / account / general
-  - Model: gpt-4o-mini
+  - Model: gemini-1.5-flash
   - Returns: category string
   - Updates ticket.category in database
         |
@@ -85,13 +85,13 @@ LangGraph StateGraph Agent                             [Added: Session 6]
   - StateGraph with TypedDict state: {ticket_id, description, category, context, suggestion}
   - Node 1: classify_node — calls classifier.py, writes category to state
   - Node 2: retrieve_node — calls knowledge_base.py, writes context to state
-  - Node 3: suggest_node — calls OpenAI with ticket + context, writes suggestion to state
+  - Node 3: suggest_node — calls Gemini with ticket + context, writes suggestion to state
   - Edges: classify_node → retrieve_node → suggest_node → END
         |
         v
 RAG Retriever                                          [Added: Session 5]
   app/knowledge_base.py
-  - OpenAI text-embedding-3-small: ticket description → 1536-dim float vector
+  - sentence-transformers all-MiniLM-L6-v2: ticket description → 384-dim float vector
   - ChromaDB collection.query(): cosine similarity search → top-3 documents
   - Returns: list of document strings (knowledge base articles / past resolutions)
         |
@@ -99,7 +99,7 @@ RAG Retriever                                          [Added: Session 5]
 LLM Suggestion Generator                               [Added: Session 6]
   Inside suggest_node in app/graph.py
   - Prompt: system prompt (support agent role) + ticket description + retrieved context
-  - Model: gpt-4o-mini
+  - Model: gemini-1.5-flash
   - Returns: resolution suggestion string
         |
         v
@@ -131,7 +131,7 @@ Deployed on Railway                                    [Added: Session 8]
 
 Railway and Render are Platform-as-a-Service (PaaS) providers that abstract away server provisioning. When you push a Git commit, the platform pulls the code, runs `pip install -r requirements.txt` to install dependencies, and executes your configured start command. The key configuration detail for FastAPI on Railway is the `$PORT` environment variable: the platform assigns a random port to your container and exposes it externally; your uvicorn process must bind to this port via `--port $PORT`. If you hardcode port 8000, the platform's health check cannot reach your app and marks the deployment as failed.
 
-FastAPI is an ASGI (Asynchronous Server Gateway Interface) application. Unlike WSGI applications (Flask, Django in default mode), ASGI servers handle each request in a non-blocking coroutine, which means a single uvicorn worker can handle many concurrent requests. However, this benefit is nullified if your route handlers make synchronous blocking calls — like synchronous SQLModel sessions or synchronous OpenAI API calls — because these block the event loop and prevent other corequests from running. In our current system, all database and LLM calls are synchronous. This is acceptable for low traffic but becomes a bottleneck at scale. The production fix is to use SQLAlchemy's async session with `asyncpg` and the OpenAI SDK's `AsyncOpenAI` client.
+FastAPI is an ASGI (Asynchronous Server Gateway Interface) application. Unlike WSGI applications (Flask, Django in default mode), ASGI servers handle each request in a non-blocking coroutine, which means a single uvicorn worker can handle many concurrent requests. However, this benefit is nullified if your route handlers make synchronous blocking calls — like synchronous SQLModel sessions or synchronous Gemini API calls — because these block the event loop and prevent other corequests from running. In our current system, all database and LLM calls are synchronous. This is acceptable for low traffic but becomes a bottleneck at scale. The production fix is to use SQLAlchemy's async session with `asyncpg` and the `google-generativeai` library's async client.
 
 The SQLite ephemeral filesystem problem on Railway is a common source of confusion for students deploying for the first time. Railway's compute containers do not have persistent storage by default — every redeploy starts with a fresh filesystem. This means any SQLite `.db` file written during runtime is lost on the next deploy, and the ChromaDB `./chroma_db/` directory is also wiped. For the demo, this is acceptable: we re-create the database tables on startup (via `SQLModel.metadata.create_all(engine)`) and re-run the knowledge base seeding script. For production, persistent storage requires either Railway's volume service or migrating to external managed services — PostgreSQL (e.g., Railway's own PostgreSQL plugin or Supabase) and a hosted vector store (Pinecone, Weaviate, or Qdrant).
 
@@ -153,11 +153,11 @@ The architecture diagram is the single most information-dense element in a techn
 
 4. The JWT `SECRET_KEY` in Railway's Variables tab must match the `SECRET_KEY` used to generate tokens. Tokens signed with one key cannot be verified with a different key — this causes 401 errors on the deployed app even when the same credentials work locally.
 
-5. The complete GET /tickets/{id}/suggest pipeline touches: JWT middleware → SQLModel query → guardrail LLM call → LangGraph invocation → classify node (LLM) → retrieve node (OpenAI embedding + ChromaDB query) → suggest node (LLM). This is 3 LLM-related API calls per request — explaining this clearly in an interview shows deep understanding of the system.
+5. The complete GET /tickets/{id}/suggest pipeline touches: JWT middleware → SQLModel query → guardrail LLM call → LangGraph invocation → classify node (LLM) → retrieve node (sentence-transformers local embedding + ChromaDB query) → suggest node (LLM). This is 2 Gemini API calls and 1 local embedding per request — explaining this clearly in an interview shows deep understanding of the system.
 
 6. LangGraph's `StateGraph` passes a typed state dictionary between nodes. Each node receives the current state, performs its computation, and returns a dict of updates to merge into the state. The node sequence is defined by `add_edge()` calls. This is fundamentally different from a simple function call chain because state is explicit and inspectable at each step.
 
-7. ChromaDB's `collection.query(query_embeddings=[[...]], n_results=3)` returns the top-k most similar documents by cosine distance. The embedding vector is a 1536-dimensional float array produced by `text-embedding-3-small`. Cosine similarity measures the angle between vectors — documents with semantically similar meaning have vectors that point in similar directions.
+7. ChromaDB's `collection.query(query_embeddings=[[...]], n_results=3)` returns the top-k most similar documents by cosine distance. The embedding vector is a 384-dimensional float array produced by sentence-transformers `all-MiniLM-L6-v2` (local, no API key). Cosine similarity measures the angle between vectors — documents with semantically similar meaning have vectors that point in similar directions.
 
 8. The `check_same_thread=False` argument in SQLite connection args is required when using SQLite from multiple threads (which FastAPI does via its default threadpool executor for synchronous route handlers). Without this, SQLite raises `ProgrammingError: SQLite objects created in a thread can only be used in that same thread`.
 
@@ -173,9 +173,9 @@ The architecture diagram is the single most information-dense element in a techn
 I built an AI Support Ticket Resolution Copilot — a FastAPI backend that automates
 the classification and resolution suggestion pipeline for customer support tickets.
 The system uses a LangGraph StateGraph with three nodes: a classify node that calls
-gpt-4o-mini to label the ticket category, a retrieve node that embeds the ticket
-description using text-embedding-3-small and queries ChromaDB for relevant knowledge
-base documents, and a suggest node that calls gpt-4o-mini with the retrieved context
+gemini-1.5-flash to label the ticket category, a retrieve node that embeds the ticket
+description using all-MiniLM-L6-v2 (sentence-transformers) and queries ChromaDB for relevant knowledge
+base documents, and a suggest node that calls gemini-1.5-flash with the retrieved context
 to generate a resolution suggestion. Auth is handled by JWT with role-based access,
 and the data layer uses SQLModel over SQLite. A prompt-based guardrail runs before
 any LLM call to filter adversarial inputs. The system is deployed on Railway, has
@@ -199,7 +199,7 @@ SQLite — which would need to be replaced with PostgreSQL at any meaningful sca
      ticket = session.get(Ticket, ticket_id)
    If ticket is None, HTTP 404 is returned.
 
-4. The guardrail function in app/guardrails.py calls gpt-4o-mini with a meta-prompt:
+4. The guardrail function in app/guardrails.py calls gemini-1.5-flash with a meta-prompt:
    "Is this input a legitimate customer support ticket? Respond Yes or No."
    If the model returns No, HTTP 400 is returned with a rejection message.
 
@@ -208,12 +208,12 @@ SQLite — which would need to be replaced with PostgreSQL at any meaningful sca
 
 6. The classify_node calls the classifier function (app/classifier.py):
    - Builds a prompt: "Classify this ticket into: billing, technical, account, general."
-   - Calls openai.chat.completions.create(model="gpt-4o-mini", ...)
+   - Calls the Gemini API with model="gemini-1.5-flash"
    - Returns the category string, which is written to state["category"]
 
 7. The retrieve_node calls ChromaDB retrieval (app/knowledge_base.py):
-   - Calls openai.embeddings.create(model="text-embedding-3-small", input=description)
-   - Gets a 1536-dimensional float vector
+   - Uses SentenceTransformer("all-MiniLM-L6-v2").encode(description) (local, no API key)
+   - Gets a 384-dimensional float vector
    - Calls collection.query(query_embeddings=[vector], n_results=3)
    - Returns list of 3 document strings, written to state["context"]
 
@@ -221,15 +221,15 @@ SQLite — which would need to be replaced with PostgreSQL at any meaningful sca
    - System: "You are a support agent. Use the following context to suggest a resolution."
    - Context: the 3 retrieved documents concatenated
    - User: the ticket description
-   - Calls openai.chat.completions.create(model="gpt-4o-mini", ...)
+   - Calls the Gemini API with model="gemini-1.5-flash"
    - Returns the suggestion string, written to state["suggestion"]
 
 9. The LangGraph graph reaches END. The route handler reads state["suggestion"].
 
 10. The route returns HTTP 200 with JSON: {"suggestion": "<suggestion text>"}
 
-Total LLM API calls per request: 3 (guardrail + classify + suggest)
-Total embedding API calls per request: 1 (retrieve node)
+Total Gemini API calls per request: 2 (guardrail + classify + suggest combined; guardrail uses gemini-1.5-flash, suggest node uses gemini-1.5-flash, classify node uses gemini-1.5-flash = 3 total)
+Total local embedding calls per request: 1 (retrieve node — sentence-transformers, no API key)
 Total database queries per request: 1 (SQLModel session.get)
 ```
 
@@ -237,7 +237,7 @@ Total database queries per request: 1 (SQLModel session.get)
 
 # What AI Was Used For + What Engineers Must Still Do
 
-## What AI (Claude Code / Cursor) Was Used For in This Session
+## What AI (Antigravity) Was Used For in This Session
 
 - Generating the initial README.md structure and content from a detailed prompt
 - Generating the Mermaid architecture diagram based on the described component list
@@ -249,7 +249,7 @@ Total database queries per request: 1 (SQLModel session.get)
 
 ## What Engineers Must Still Do
 
-- Cross-check the generated README API table against the actual routes in `app/routes/tickets.py` — Claude Code will sometimes invent endpoints that do not exist or omit real ones
+- Cross-check the generated README API table against the actual routes in `app/routes/tickets.py` — Antigravity will sometimes invent endpoints that do not exist or omit real ones
 - Verify that the architecture diagram includes every actual component (ChromaDB, LangGraph, guardrails) and does not add components that were not built
 - Manually create and verify `.env.example` by checking every `os.getenv()` call in the codebase — an AI assistant cannot know your actual env var names unless the code is read
 - Test every step in the deployment guide on a real Railway account — generated deployment instructions occasionally reference UI elements that have changed or use incorrect config syntax
@@ -372,7 +372,7 @@ You built and deployed an AI Support Ticket Resolution Copilot — a complete Fa
 
 - **Backend Engineering**: FastAPI routes, SQLModel ORM, SQLite persistence, Pydantic schemas, HTTP status codes
 - **Authentication and Authorization**: JWT with HS256 signing, role-based access control, bcrypt password hashing
-- **LLM Integration**: OpenAI API (chat completions and embeddings), prompt engineering, structured output parsing
+- **LLM Integration**: Gemini API (gemini-1.5-flash for chat completions), sentence-transformers (all-MiniLM-L6-v2 for embeddings), prompt engineering, structured output parsing
 - **RAG Pipeline**: ChromaDB vector store, cosine similarity retrieval, context injection into LLM prompts
 - **Agent Architecture**: LangGraph StateGraph, multi-node conditional workflows, explicit state management
 - **Testing and Evaluation**: pytest with fixtures and test DB isolation, custom eval runner, prompt-based guardrails

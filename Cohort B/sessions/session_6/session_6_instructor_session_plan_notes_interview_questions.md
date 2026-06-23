@@ -169,7 +169,7 @@ A LangGraph graph is not the same as a LangChain LCEL chain. In a chain, every s
 
 ---
 
-## 20–35 min: Build the Feature Using Claude Code or Cursor AI
+## 20–35 min: Build the Feature Using Antigravity
 
 ### Instructor Goal
 
@@ -434,7 +434,7 @@ Session 6 is the architectural inflection point of the project. Every previous s
 
 6. **Nodes returning the full state dict instead of partial updates** — If a node returns the complete `TicketState` dict, fields set by previous nodes may be overwritten with `None`. Fix: nodes return only the fields they modify — e.g., `classify_node` returns `{"classification": result}`, not the full state.
 
-7. **`generate_node` crashing on empty `retrieved_docs`** — If `retrieve_docs()` returns `[]` and the node does not handle this, the OpenAI call may fail or produce a low-quality response. Fix: add a check `docs = state.get("retrieved_docs") or []` and handle the empty case.
+7. **`generate_node` crashing on empty `retrieved_docs`** — If `retrieve_docs()` returns `[]` and the node does not handle this, the Gemini API call may fail or produce a low-quality response. Fix: add a check `docs = state.get("retrieved_docs") or []` and handle the empty case.
 
 8. **Forgetting to add the ticket lookup before `graph.invoke()`** — If the ticket ID does not exist, calling `graph.invoke({"ticket_id": id, "ticket_text": None})` will propagate `None` through all nodes and produce confusing errors. Fix: always do `ticket = db.get(Ticket, id)` and `if not ticket: raise HTTPException(404)` before constructing the initial state.
 
@@ -512,7 +512,7 @@ A normal edge (`graph.add_edge("classify", "retrieve")`) unconditionally routes 
 
 Expected answer:
 
-Since `classify_node` is a pure function with the signature `(state: TicketState) -> dict`, it can be tested without running the full graph. A pytest test would construct a minimal `TicketState` dict with `ticket_text` set, call `classify_node()` directly, and assert that the returned dict contains a `classification` key with a valid string value. The test would mock the `classify_ticket()` call using `unittest.mock.patch` to avoid real OpenAI API calls. For example: `with patch("app.services.classifier.classify_ticket") as mock_classify: mock_classify.return_value = {"category": "billing"}; result = classify_node({"ticket_id": 1, "ticket_text": "..."})`. This test is fast, isolated, and does not require a running database or LLM.
+Since `classify_node` is a pure function with the signature `(state: TicketState) -> dict`, it can be tested without running the full graph. A pytest test would construct a minimal `TicketState` dict with `ticket_text` set, call `classify_node()` directly, and assert that the returned dict contains a `classification` key with a valid string value. The test would mock the `classify_ticket()` call using `unittest.mock.patch` to avoid real Gemini API calls. For example: `with patch("app.services.classifier.classify_ticket") as mock_classify: mock_classify.return_value = {"category": "billing"}; result = classify_node({"ticket_id": 1, "ticket_text": "..."})`. This test is fast, isolated, and does not require a running database or LLM.
 
 ### Q10. What is the human-in-the-loop design pattern and why is it the correct default for customer-facing AI?
 
@@ -542,11 +542,11 @@ Expected answer:
 
 LangGraph supports checkpointing through a `MemorySaver` or database-backed checkpointer. When a checkpointer is attached to the compiled graph with `graph.compile(checkpointer=MemorySaver())`, the graph saves its state at each node completion. Each graph run is identified by a `thread_id` passed in the `config` dict to `invoke()`. If the graph is interrupted — for example, by a human-in-the-loop pause — the state is persisted and the run can be resumed later by calling `invoke()` again with the same `thread_id`. In the Session 6 workflow, this would allow a human reviewer to approve or modify the suggested response in a subsequent API call, and the graph would continue from where it paused. This is not in scope for Session 6 but is the natural extension toward a production human-in-the-loop system.
 
-### Q14. What happens to the `POST /tickets/{id}/resolve` endpoint if the OpenAI API is down? How would you make it resilient?
+### Q14. What happens to the `POST /tickets/{id}/resolve` endpoint if the Gemini API is down? How would you make it resilient?
 
 Expected answer:
 
-If the OpenAI API is down, the LLM calls inside `classify_node` and `generate_node` will raise an `openai.APIConnectionError` or `openai.RateLimitError`. Without error handling, this propagates as an unhandled exception through the node, through `graph.invoke()`, and surfaces as a 500 Internal Server Error on the FastAPI endpoint. A resilient design wraps LLM calls inside each node with try/except. On failure, the node returns a degraded state: `classify_node` returns `{"classification": "unknown"}`, `generate_node` returns `{"confidence_score": 0.0, "needs_human_review": True}`. The graph then routes to human review automatically. The endpoint returns 200 with `needs_human_review: true` rather than 500, and the ticket enters the human review queue as a fallback. This pattern is called graceful degradation.
+If the Gemini API is down, the LLM calls inside `classify_node` and `generate_node` will raise a `google.api_core.exceptions.ServiceUnavailable` or similar network/quota error. Without error handling, this propagates as an unhandled exception through the node, through `graph.invoke()`, and surfaces as a 500 Internal Server Error on the FastAPI endpoint. A resilient design wraps LLM calls inside each node with try/except. On failure, the node returns a degraded state: `classify_node` returns `{"classification": "unknown"}`, `generate_node` returns `{"confidence_score": 0.0, "needs_human_review": True}`. The graph then routes to human review automatically. The endpoint returns 200 with `needs_human_review: true` rather than 500, and the ticket enters the human review queue as a fallback. This pattern is called graceful degradation.
 
 ### Q15. If you needed to add a fifth node — for example, a `sentiment_node` that detects customer anger and escalates to a senior agent — where would you add it in the graph and what changes would be needed?
 

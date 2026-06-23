@@ -46,13 +46,13 @@ Session 3 (Auth — coming next):
 HTTP Request --> FastAPI Router --> JWT Decode (OAuth2PasswordBearer) --> Depends(get_current_user) --> SQLModel ORM --> SQLite (tickets.db + users table) --> HTTP Response
 
 Session 4 (LLM Classification — planned):
-HTTP Request --> FastAPI Router --> JWT Auth --> SQLModel ORM --> OpenAI API (classify ticket) --> SQLModel ORM (write classification back) --> SQLite --> HTTP Response
+HTTP Request --> FastAPI Router --> JWT Auth --> SQLModel ORM --> Gemini API (gemini-1.5-flash) (classify ticket) --> SQLModel ORM (write classification back) --> SQLite --> HTTP Response
 
 Session 5 (RAG / Vector Search — planned):
-HTTP Request --> FastAPI Router --> JWT Auth --> SQLModel ORM --> OpenAI Embeddings --> ChromaDB (vector store) --> Similarity Results --> HTTP Response
+HTTP Request --> FastAPI Router --> JWT Auth --> SQLModel ORM --> sentence-transformers embeddings --> ChromaDB (vector store) --> Similarity Results --> HTTP Response
 
 Session 6+ (LangGraph Agent — planned):
-HTTP Request --> FastAPI Router --> JWT Auth --> LangGraph Agent (multi-step) --> SQLModel + OpenAI + ChromaDB --> HTTP Response with resolution
+HTTP Request --> FastAPI Router --> JWT Auth --> LangGraph Agent (multi-step) --> SQLModel + Gemini API (gemini-1.5-flash) + ChromaDB --> HTTP Response with resolution
 ```
 
 Every layer from Session 3 onwards depends on the database being available. The decision to add persistence in Session 2 — before auth, before LLM integration — is deliberate architecture sequencing.

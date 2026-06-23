@@ -170,7 +170,7 @@ Expected answer: raw SQL works but gives you no type safety, no Python object mo
 
 ---
 
-## 20–35 min: Build the Feature Using Claude Code or Cursor
+## 20–35 min: Build the Feature Using Antigravity
 
 ### Instructor Goal
 
@@ -186,7 +186,7 @@ Check that the Session 1 codebase is in the expected state:
 
 ### Run Prompt 1 (Main Build Prompt) from the Student Pre-Session File
 
-Paste the prompt into Claude Code or Cursor. Observe what is generated.
+Paste the prompt into Antigravity. Observe what is generated.
 
 ### What to Watch For in the Generated Code
 
@@ -286,7 +286,7 @@ Explain:
 
 ### Student Task
 
-Students run Prompt 1 from the pre-session file in their own Claude Code or Cursor environment. They should have the Session 1 codebase already open.
+Students run Prompt 1 from the pre-session file in their own Antigravity environment. They should have the Session 1 codebase already open.
 
 ### Instructor Support Areas
 
@@ -624,7 +624,7 @@ Students should verify all of the following by the end of the session:
 
 # Instructor Backup Plan
 
-If Claude Code or Cursor generation fails or produces incorrect output:
+If Antigravity generation fails or produces incorrect output:
 
 1. Instructor switches to pre-written reference code and pastes it file by file on screen.
 2. Students copy the reference code directly — understanding walk-through still happens for all files.

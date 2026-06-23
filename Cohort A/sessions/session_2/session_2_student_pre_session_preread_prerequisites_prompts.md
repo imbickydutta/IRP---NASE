@@ -145,6 +145,19 @@ Complete this before the live session:
 5. Read the prompts below before the session starts — you do not need to memorize them, just read once
 6. Keep this file open during the session
 7. Ensure your internet connection is stable (AI calls need network access)
+8. Set up the Gemini API before the session:
+   - In your project root, run: `npm install @google/generative-ai`
+   - Create a `.env` file in your project root (same folder as `package.json`) with this line:
+     ```
+     VITE_GEMINI_API_KEY=your_key_here
+     ```
+   - Get a free API key from: https://aistudio.google.com (free Google account, no credit card required)
+   - After adding the `.env` file, restart your Vite dev server (`npm run dev`)
+   - Verify it works: temporarily add this line at the top of your main component and check the browser console:
+     ```
+     console.log(import.meta.env.VITE_GEMINI_API_KEY)
+     ```
+     You should see your API key printed. Remove this line after verifying.
 
 ## Optional Setup
 
@@ -257,6 +270,16 @@ Do not add:
 - Auto-resume matching
 - ATS scoring
 - Login or authentication
+
+For the AI integration, use the following setup:
+- Package: @google/generative-ai (already installed via npm install @google/generative-ai)
+- API key: import.meta.env.VITE_GEMINI_API_KEY
+- Model: gemini-1.5-flash
+- Import: import { GoogleGenerativeAI } from "@google/generative-ai"
+- Init: const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY)
+- Model instance: const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
+- For JSON output use generationConfig: { responseMimeType: "application/json", temperature: 0 }
+- Call: const result = await model.generateContent(prompt); const text = result.response.text()
 
 Keep the existing profile dashboard fully intact. Add the JD Analyzer below or alongside it.
 

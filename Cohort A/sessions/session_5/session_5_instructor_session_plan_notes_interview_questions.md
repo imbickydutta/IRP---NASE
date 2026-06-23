@@ -232,7 +232,8 @@ The main prompt should clearly specify:
 - Is the manual entry option present?
 - Is the answer text area present?
 - Is the Submit for Evaluation button present?
-- Is the rubric prompt clearly constructed before sending to AI?
+- Is the rubric prompt clearly constructed before sending to AI? (Gemini 1.5 Flash via @google/generative-ai — free tier)
+- Does the AI call use `genAI.getGenerativeModel({ model: "gemini-1.5-flash" })` and `model.generateContent(prompt)`?
 - Does the feedback card display all five components?
 - Is there a loading state while AI processes the evaluation?
 
@@ -634,3 +635,14 @@ If the AI tool generation fails or integration with Session 4 state is taking to
 5. Students use the prompts to regenerate or fix their own app after class.
 6. Do not sacrifice the concept pause and interview explanation section. Even if the build is incomplete, every student must be able to explain rubric-based evaluation.
 7. If the AI response is not parsing into five sections cleanly, switch to Prompt 6 (structured JSON output prompt) which forces a JSON schema return — this is easier to parse reliably.
+
+## Gemini API Troubleshooting
+
+If AI calls fail during the session:
+
+- Check that the student's `.env` file is in the project root (same folder as `package.json`) and contains `VITE_GEMINI_API_KEY=...` with a valid key
+- The dev server must be restarted after adding or changing the `.env` file — `npm run dev` again
+- Confirm the import is correct: `import { GoogleGenerativeAI } from "@google/generative-ai"`
+- Confirm the key is read as: `import.meta.env.VITE_GEMINI_API_KEY` (VITE_ prefix required for Vite to expose it to the browser)
+- Free tier rate limit is 15 RPM — if a student hits the rate limit, wait 1 minute and try again; this is sufficient for classroom use
+- Get a free key at: aistudio.google.com (no credit card required)

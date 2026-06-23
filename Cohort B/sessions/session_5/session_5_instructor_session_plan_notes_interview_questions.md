@@ -14,7 +14,7 @@ AI Support Ticket Resolution Copilot
 
 ## Session 5 Objective
 
-By the end of Session 5, students will have extended the Support Ticket backend with a full Retrieval-Augmented Generation (RAG) pipeline. The pipeline ingests a static knowledge base of support documents, chunks and embeds them using OpenAI's text-embedding-3-small model, stores the vectors in a local persistent ChromaDB collection, and at request time retrieves the top-3 most relevant chunks to construct a grounded LLM response suggestion for any ticket.
+By the end of Session 5, students will have extended the Support Ticket backend with a full Retrieval-Augmented Generation (RAG) pipeline. The pipeline ingests a static knowledge base of support documents, chunks and embeds them using the sentence-transformers all-MiniLM-L6-v2 model (local, no API key required), stores the vectors in a local persistent ChromaDB collection, and at request time retrieves the top-3 most relevant chunks to construct a grounded LLM response suggestion for any ticket.
 
 Students will understand the difference between retrieval and generation, why grounding reduces hallucination, and how to expose the feature through a clean FastAPI endpoint.
 
@@ -24,7 +24,7 @@ A working `GET /tickets/{id}/suggested-response` endpoint that:
 
 1. Loads the ticket from the database by ID
 2. Queries ChromaDB for the top-3 relevant knowledge base chunks using cosine similarity on the ticket's subject and description
-3. Injects those chunks as context into an OpenAI chat completion prompt
+3. Injects those chunks as context into a Gemini chat completion prompt
 4. Returns a structured JSON response containing `ticket_id`, `suggested_response`, and `sources` (the chunk IDs used)
 
 The knowledge base is populated once at application startup from Python string constants. ChromaDB persists to disk across restarts.
@@ -37,9 +37,9 @@ The knowledge base is populated once at application startup from Python string c
 
 - Static knowledge base as Python string constants in `app/knowledge_base/documents.py`
 - Text chunking by paragraph (split on double newline `\n\n`) with a maximum chunk character length fallback
-- OpenAI `text-embedding-3-small` for generating embeddings (1536-dimensional vectors)
+- sentence-transformers `all-MiniLM-L6-v2` for generating embeddings (384-dimensional vectors, local, no API key required)
 - ChromaDB local persistent collection stored at `./chroma_db` directory
-- `app/services/rag_service.py` module that owns all RAG logic: chunking, embedding, upserting, querying
+- `app/services/rag_service.py` module that owns all RAG logic: chunking, embedding (sentence-transformers), upserting, querying
 - Top-3 cosine similarity retrieval from ChromaDB (ChromaDB handles cosine by default with `cosine` space)
 - LLM call with retrieved context injected into the system or user prompt
 - `GET /tickets/{id}/suggested-response` endpoint in `app/routes/tickets.py`
@@ -58,7 +58,7 @@ The knowledge base is populated once at application startup from Python string c
 - Streaming LLM responses
 - Asynchronous embedding generation (keep it synchronous at startup)
 - LangChain or LangGraph wrappers (those come in Session 6)
-- sentence-transformers library (use OpenAI embeddings only)
+- OpenAI embeddings API (use sentence-transformers locally instead)
 
 Session 5 is specifically about understanding raw RAG mechanics. Abstraction layers come in Session 6.
 
@@ -80,7 +80,7 @@ The project currently has:
 - `app/dependencies.py` — `get_current_user` dependency, `get_session` DB dependency
 - `app/services/classifier.py` — LLM-based classifier that sets `category` on ticket creation
 - `app/database.py` — SQLite engine + `create_db_and_tables()`
-- `requirements.txt` — includes `fastapi`, `sqlmodel`, `openai`, `python-jose`, `passlib`
+- `requirements.txt` — includes `fastapi`, `sqlmodel`, `google-generativeai`, `python-jose`, `passlib`
 
 Tell students: today we are not touching auth, CRUD, or the classifier. We are adding one new capability on top: the ability to retrieve relevant knowledge and generate a grounded support response.
 
@@ -112,7 +112,7 @@ Ground students in what exists before adding anything new.
 
 1. Open the project in the terminal. Run `uvicorn app.main:app --reload` and open Swagger at `http://127.0.0.1:8000/docs`.
 2. Walk through the existing endpoints: hit `POST /tickets` live and show the response JSON — note that `category` is now auto-populated by the Session 4 classifier.
-3. Show `app/services/classifier.py` briefly — remind students this calls OpenAI with the ticket text and returns a category string that gets written to the DB.
+3. Show `app/services/classifier.py` briefly — remind students this calls Gemini with the ticket text and returns a category string that gets written to the DB.
 4. State the gap: "We can classify a ticket. But we cannot suggest what the support agent should say. That requires knowledge. Today we add that knowledge layer."
 5. Ask the class: "If a user says their payment failed, where does the support agent get their answer from?" Accept answers. Lead to: a knowledge base of standard operating procedures and policy documents.
 6. Write on the board or share screen: "Session 5 adds: Knowledge Base → Embeddings → Vector DB → Retrieval → Grounded Generation."
@@ -134,8 +134,8 @@ Ensure students understand the full RAG data flow before touching code.
 [Knowledge Base Documents]
         ↓ chunk by paragraph
 [Text Chunks]
-        ↓ OpenAI text-embedding-3-small
-[1536-dim float vectors]
+        ↓ sentence-transformers (local) all-MiniLM-L6-v2
+[384-dim float vectors]
         ↓ upsert with metadata
 [ChromaDB local persistent collection: support_kb]
 
@@ -147,7 +147,7 @@ Ensure students understand the full RAG data flow before touching code.
         ↓ cosine similarity top-3
 [Retrieved chunks]
         ↓ inject as context into LLM prompt
-[OpenAI gpt-4o-mini chat completion]
+[Gemini 1.5 Flash chat completion]
         ↓
 [Suggested response + source chunk IDs]
         ↓ return via GET /tickets/{id}/suggested-response
@@ -165,7 +165,7 @@ Ensure students understand the full RAG data flow before touching code.
 
 ---
 
-## 20–35 min: Build the Feature Using Claude Code or Cursor AI
+## 20–35 min: Build the Feature Using Antigravity
 
 ### Instructor Goal
 
@@ -173,17 +173,17 @@ Demonstrate how to use an AI coding tool to scaffold the RAG feature with a prec
 
 ### Specific Actions
 
-1. Open Claude Code or Cursor in the project directory.
+1. Open Antigravity in the project directory.
 2. Use Prompt 1 from the student pre-session file verbatim. Read it aloud before pasting so students understand the structure of a good engineering prompt.
 3. Watch the generated output together. Before accepting, review:
    - Does `documents.py` contain 8–10 string constants, not a file loader?
-   - Does `rag_service.py` import `chromadb`, `openai`, and chunk by `\n\n`?
+   - Does `rag_service.py` import `chromadb`, `sentence_transformers`, `google.generativeai`, and chunk by `\n\n`?
    - Is the ChromaDB client created with `PersistentClient(path="./chroma_db")`?
    - Does the `get_or_create_collection` call specify `metadata={"hf:space": "cosine"}`?
-   - Is the embedding call using `text-embedding-3-small`?
+   - Is the embedding call using `SentenceTransformer("all-MiniLM-L6-v2").encode()`?
    - Is the endpoint `GET /tickets/{id}/suggested-response` and does it return `ticket_id`, `suggested_response`, `sources`?
 4. If the AI generates LangChain imports — stop and redirect. Explain this is a scope issue and re-prompt with an explicit "Do not use LangChain or LangGraph" constraint.
-5. If the AI generates `sentence-transformers` — redirect to OpenAI embeddings.
+5. If the AI generates `openai.embeddings.create` — redirect to sentence-transformers.
 6. Accept the generated code and immediately run the server. Show the startup log where ChromaDB is initialised.
 
 ---
@@ -200,7 +200,7 @@ Every student must understand what the AI generated before they are allowed to p
 
 2. **Chunking logic in `rag_service.py`** — Walk through the chunk function. Explain: `doc.split("\n\n")` splits on blank lines (paragraph breaks). Point out the character-length fallback: if a chunk is longer than `MAX_CHUNK_SIZE` characters, split it further. Ask: "What is the risk of very large chunks?" (Diluted relevance, fewer chunks retrieved.)
 
-3. **Embedding call** — Show the `openai.embeddings.create(input=texts, model="text-embedding-3-small")` call. Explain that this returns a list of `Embedding` objects, each with a `.embedding` attribute that is a list of 1536 floats. Mention the cost: text-embedding-3-small is $0.02 per million tokens — very cheap.
+3. **Embedding call** — Show the `SentenceTransformer("all-MiniLM-L6-v2").encode(texts)` call. Explain that this runs locally — no API key, no network call, no cost. It returns a NumPy array of 384-float vectors; call `.tolist()` to convert to plain Python lists for ChromaDB. Mention the model is 90MB and is downloaded once on first use.
 
 4. **ChromaDB upsert** — Show `collection.upsert(ids=chunk_ids, embeddings=vectors, documents=texts, metadatas=meta)`. Explain `upsert` means insert-or-update by ID — safe to call on startup multiple times.
 
@@ -220,12 +220,13 @@ Students replicate the build in their own environment.
 
 ### Specific Actions
 
-1. Direct all students to run Prompt 1 from the pre-session file in their Claude Code or Cursor.
-2. Tell students to run `pip install chromadb` if not already installed, and confirm `openai` is already present from Session 4.
+1. Direct all students to run Prompt 1 from the pre-session file in their Antigravity.
+2. Tell students to run `pip install chromadb sentence-transformers` if not already installed. Also confirm `google-generativeai` is present from Session 4 and `GEMINI_API_KEY` is set in `.env`.
 3. Give students 12 minutes to paste the prompt, review the generated output, and run the server.
 4. Circulate (or watch student screens if remote) for these specific failure modes:
    - `ModuleNotFoundError: No module named 'chromadb'` — fix with `pip install chromadb`.
-   - `openai.AuthenticationError` — confirm `OPENAI_API_KEY` is set in the environment or `.env`.
+   - `ModuleNotFoundError: No module named 'sentence_transformers'` — fix with `pip install sentence-transformers`.
+   - `google.auth.exceptions.DefaultCredentialsError` or similar — confirm `GEMINI_API_KEY` is set in the environment or `.env`.
    - `AttributeError: 'Collection' has no attribute 'upsert'` — student has old ChromaDB. Fix: `pip install --upgrade chromadb`.
    - ChromaDB `InvalidArgumentError` about distance metric — ensure `metadata={"hf:space": "cosine"}` not `{"distance": "cosine"}`. The correct key for ChromaDB is `hf:space`.
 5. When a student's server starts cleanly and they can see the startup log showing "Knowledge base initialised with N chunks", mark them as unblocked.
@@ -260,7 +261,7 @@ Teach production-grade defensive coding for the RAG pipeline.
 
 1. Test `GET /tickets/9999/suggested-response` — confirm it returns HTTP 404, not a 500. If it returns 500, show the fix: add `if not ticket: raise HTTPException(status_code=404, detail="Ticket not found")`.
 2. Simulate ChromaDB returning zero results (e.g., query with a nonsense string). Show what happens downstream — the LLM prompt has no context. Add a guard: if `len(retrieved_chunks) == 0`, return a response that says no relevant knowledge was found rather than calling the LLM with empty context.
-3. Show what happens if `OPENAI_API_KEY` is missing at embedding time — an `openai.AuthenticationError` bubbles up as a 500. Add a startup check that logs a clear warning if the key is absent.
+3. Show what happens if `GEMINI_API_KEY` is missing at generation time — a `google.api_core.exceptions.PermissionDenied` or similar error bubbles up as a 500. Add a startup check that logs a clear warning if the key is absent. Note: sentence-transformers embeddings do not require any API key, so embedding always works locally.
 4. Discuss idempotency: what happens if the server restarts and the startup event runs again? The `upsert` call handles this — no duplicate chunks if chunk IDs are deterministic (e.g., `doc_name_chunk_0`, `doc_name_chunk_1`).
 5. Briefly show how to write a test for the endpoint using `pytest` and `httpx.AsyncClient` with a mocked ChromaDB query — preview for the unit test prompt.
 
@@ -276,7 +277,7 @@ Translate implementation into durable technical understanding students can artic
 
 **What is an embedding?**
 
-An embedding is a fixed-length numerical vector produced by a neural encoder model. The model is trained so that inputs with similar meaning produce vectors that are geometrically close in the high-dimensional vector space. OpenAI's `text-embedding-3-small` produces 1536-dimensional vectors. Every float in that vector encodes some aspect of the semantic content of the input text. The model has no explicit feature list — the representation is distributed across all 1536 dimensions.
+An embedding is a fixed-length numerical vector produced by a neural encoder model. The model is trained so that inputs with similar meaning produce vectors that are geometrically close in the high-dimensional vector space. The sentence-transformers `all-MiniLM-L6-v2` model produces 384-dimensional vectors and runs entirely locally — no API key, no network call. Every float in that vector encodes some aspect of the semantic content of the input text. The model has no explicit feature list — the representation is distributed across all 384 dimensions.
 
 **What is cosine similarity, really?**
 
@@ -320,7 +321,7 @@ Drill the questions from the interview questions section below. Use cold-calling
 
 ### Instructor Closing
 
-Today we added a full RAG pipeline from scratch: static knowledge base, chunking, OpenAI embeddings, ChromaDB vector storage, cosine similarity retrieval, and grounded generation.
+Today we added a full RAG pipeline from scratch: static knowledge base, chunking, sentence-transformers local embeddings, ChromaDB vector storage, cosine similarity retrieval, and grounded generation via Gemini 1.5 Flash.
 
 In Session 6, we will wrap this pipeline inside a LangGraph agentic workflow. Instead of a single direct call, the system will use a graph of nodes — a Classify node, a Retrieve node, a Generate node, and a Review node — that can loop or branch based on the quality of the output. We will add a self-critique step that re-runs retrieval if the initial response is rated as insufficient.
 
@@ -335,25 +336,25 @@ The RAG service you built today becomes one node inside that graph.
 1. The ingestion pipeline (embed + store) and the query pipeline (embed + retrieve + generate) are architecturally separate. In production they run at different times. Startup vs. per-request.
 2. Chunk IDs must be deterministic — using `{doc_name}_chunk_{i}` ensures upsert is idempotent across restarts.
 3. ChromaDB's `PersistentClient` writes to disk. `EphemeralClient` does not. Students must use `PersistentClient` or the collection resets on every restart.
-4. The `text-embedding-3-small` model dimension is 1536. Do not mix embedding models — if you embed documents with model A and query with model B, retrieval results are meaningless.
+4. The `all-MiniLM-L6-v2` model dimension is 384. Do not mix embedding models — if you embed documents with model A and query with model B, retrieval results are meaningless.
 5. Cosine similarity is the correct distance metric for text embeddings. Euclidean distance on high-dimensional vectors suffers from the curse of dimensionality. ChromaDB uses cosine when you set `metadata={"hf:space": "cosine"}`.
 6. The LLM does not retrieve — it generates. Students often conflate the two. Reinforce: "The LLM has no access to ChromaDB. We do the retrieval, then hand the results to the LLM."
 7. Source attribution (`sources` field in the response) is important for production trust. It allows a human reviewer to verify the LLM's answer against the original document.
-8. This is the first feature where the OpenAI API is called twice per request (once for embedding, once for generation). Students should understand this has latency and cost implications.
+8. For embeddings, sentence-transformers runs locally — no API call, no cost, no latency from the network. The only external API call per request is the Gemini generation call. Students should understand that local embeddings eliminate one network round-trip compared to using a cloud embedding API.
 
 ## Common Student Mistakes
 
 1. **`ModuleNotFoundError: No module named 'chromadb'`** — Student did not install chromadb. Fix: `pip install chromadb`. Check that it is also added to `requirements.txt`.
 
-2. **`openai.BadRequestError: Input text is too long`** — A chunk is too large for the embedding model. Fix: enforce `MAX_CHUNK_SIZE = 500` characters in the chunking function and split aggressively.
+2. **`sentence_transformers encode() returns unexpected shape`** — Usually caused by passing a single string instead of a list. Fix: always pass a `list[str]` to `embedding_model.encode(texts)`, then call `.tolist()` on the result.
 
-3. **`AttributeError: 'NoneType' has no attribute 'embedding'`** — The OpenAI embedding response returned unexpectedly. Usually caused by sending an empty string as input. Fix: filter out empty chunks before calling the embedding API.
+3. **`AttributeError: 'NoneType' has no attribute 'text'`** — The Gemini response returned unexpectedly. Usually caused by a quota/rate-limit hit on the free tier. Fix: add `time.sleep(2)` between calls in classroom demos. Verify `GEMINI_API_KEY` is set.
 
 4. **ChromaDB `ValueError: Collection already exists`** — Student is calling `create_collection` instead of `get_or_create_collection`. Fix: use `client.get_or_create_collection(name="support_kb", metadata={"hf:space": "cosine"})`.
 
 5. **`422 Unprocessable Entity` on `GET /tickets/{id}/suggested-response`** — Path parameter `id` is being sent as a string but the route expects an integer. Check the route definition: `async def get_suggested_response(id: int, ...)`.
 
-6. **Retrieval returns completely wrong chunks** — Student is embedding documents with one model and querying with a different one. Fix: confirm both ingestion and query calls use `model="text-embedding-3-small"`.
+6. **Retrieval returns completely wrong chunks** — Student is embedding documents with one model and querying with a different one. Fix: confirm both ingestion and query calls use the same `SentenceTransformer("all-MiniLM-L6-v2")` instance (or identical model name).
 
 7. **`suggested_response` is generic and ignores the context chunks** — The retrieved chunks are not being injected into the LLM prompt. Fix: verify the prompt construction concatenates chunk texts into the user message before the LLM call.
 
@@ -380,7 +381,7 @@ If a student's ChromaDB installation fails during the session, they should comme
 ### Q1. What did you add in Session 5?
 
 Expected answer:
-I added a RAG pipeline to the Support Ticket Copilot. This consists of a static knowledge base of support policy documents stored as Python string constants, a chunking step that splits documents by paragraph, an embedding step using OpenAI's `text-embedding-3-small` model to convert each chunk into a 1536-dimensional vector, and a ChromaDB local persistent collection that stores those vectors. At request time, the `GET /tickets/{id}/suggested-response` endpoint embeds the ticket text, queries ChromaDB for the top-3 semantically similar chunks, injects them as context into an OpenAI chat completion call, and returns a structured JSON response with the suggested text and the source chunk IDs.
+I added a RAG pipeline to the Support Ticket Copilot. This consists of a static knowledge base of support policy documents stored as Python string constants, a chunking step that splits documents by paragraph, an embedding step using the sentence-transformers `all-MiniLM-L6-v2` model (local, no API key) to convert each chunk into a 384-dimensional vector, and a ChromaDB local persistent collection that stores those vectors. At request time, the `GET /tickets/{id}/suggested-response` endpoint embeds the ticket text using the same local model, queries ChromaDB for the top-3 semantically similar chunks, injects them as context into a Gemini 1.5 Flash chat completion call, and returns a structured JSON response with the suggested text and the source chunk IDs.
 
 ### Q2. What is the role of ChromaDB in your project?
 
@@ -395,12 +396,12 @@ The knowledge base is 8 to 10 support policy documents defined as Python string 
 ### Q4. How does the `GET /tickets/{id}/suggested-response` endpoint work end to end?
 
 Expected answer:
-The endpoint receives a ticket ID as a path parameter. It first checks the database for the ticket using `session.get(Ticket, id)` and raises a 404 if not found. It then calls `rag_service.get_suggested_response(ticket)`, which embeds the ticket's subject and description concatenation using `text-embedding-3-small`, queries ChromaDB for the top-3 chunks, constructs an OpenAI chat completion prompt with those chunks as context, and returns a `SuggestedResponseOut` Pydantic model containing `ticket_id`, `suggested_response` (the LLM text), and `sources` (the list of retrieved chunk IDs).
+The endpoint receives a ticket ID as a path parameter. It first checks the database for the ticket using `session.get(Ticket, id)` and raises a 404 if not found. It then calls `rag_service.get_suggested_response(ticket)`, which embeds the ticket's subject and description concatenation using the local sentence-transformers model, queries ChromaDB for the top-3 chunks, constructs a Gemini 1.5 Flash chat completion prompt with those chunks as context, and returns a `SuggestedResponseOut` Pydantic model containing `ticket_id`, `suggested_response` (the LLM text), and `sources` (the list of retrieved chunk IDs).
 
 ### Q5. Why did you add this feature after the LLM classifier and not before?
 
 Expected answer:
-Session 4 added the LLM classifier which introduced the OpenAI client and the pattern of calling the LLM during request processing. Session 5 builds on that foundation by introducing a second AI subsystem — the RAG pipeline — that also uses the OpenAI API but adds a retrieval step. The sequencing matters because students first needed to understand direct LLM calls before introducing the more complex retrieval-augmented pattern. Also, classification depends only on the ticket text, while RAG depends on a separate data store — the vector DB — which is a new infrastructure component to introduce after the LLM basics are established.
+Session 4 added the LLM classifier which introduced the Gemini client and the pattern of calling the LLM during request processing. Session 5 builds on that foundation by introducing a second AI subsystem — the RAG pipeline — that adds local embeddings via sentence-transformers and a retrieval step before generation. The sequencing matters because students first needed to understand direct LLM calls before introducing the more complex retrieval-augmented pattern. Also, classification depends only on the ticket text, while RAG depends on a separate data store — the vector DB — which is a new infrastructure component to introduce after the LLM basics are established.
 
 ---
 
@@ -414,12 +415,12 @@ The chunking function takes a document string and a `max_chunk_size` integer (de
 ### Q7. What does the `upsert` call look like in your code and why upsert rather than add?
 
 Expected answer:
-The call is `collection.upsert(ids=chunk_ids, embeddings=vectors, documents=chunk_texts, metadatas=metadatas)` where `chunk_ids` is a list of strings like `["refund_policy_chunk_0", "refund_policy_chunk_1"]`, `embeddings` is a list of 1536-element float lists, `documents` is the original text of each chunk, and `metadatas` is a list of dicts containing `{"source": doc_name}`. I use `upsert` rather than `add` because `upsert` is idempotent — if a chunk with that ID already exists in the collection it updates it, if not it inserts it. This means the startup initialisation code can run safely on every server restart without creating duplicate entries.
+The call is `collection.upsert(ids=chunk_ids, embeddings=vectors, documents=chunk_texts, metadatas=metadatas)` where `chunk_ids` is a list of strings like `["refund_policy_chunk_0", "refund_policy_chunk_1"]`, `embeddings` is a list of 384-element float lists (produced by the local sentence-transformers model), `documents` is the original text of each chunk, and `metadatas` is a list of dicts containing `{"source": doc_name}`. I use `upsert` rather than `add` because `upsert` is idempotent — if a chunk with that ID already exists in the collection it updates it, if not it inserts it. This means the startup initialisation code can run safely on every server restart without creating duplicate entries.
 
 ### Q8. How do you construct the LLM prompt in the generation step?
 
 Expected answer:
-I construct the prompt in two parts. The system message tells the LLM it is a support agent assistant that must base its answer only on the provided context. The user message contains two sections: first the ticket text formatted as "Ticket subject: {subject}\nDescription: {description}", and then the retrieved context formatted as a numbered list: "Context 1: {chunk_text}\nContext 2: ...\nContext 3: ...". I call `openai.chat.completions.create` with `model="gpt-4o-mini"`, `messages=[system_msg, user_msg]`, and `temperature=0.3` to reduce variance in the output. The lower temperature makes the response more deterministic and grounded.
+I construct the prompt in two parts. The system message tells the LLM it is a support agent assistant that must base its answer only on the provided context. The user message contains two sections: first the ticket text formatted as "Ticket subject: {subject}\nDescription: {description}", and then the retrieved context formatted as a numbered list: "Context 1: {chunk_text}\nContext 2: ...\nContext 3: ...". I call `model.generate_content(prompt)` with a Gemini 1.5 Flash model configured with `temperature=0.3` to reduce variance in the output. The lower temperature makes the response more deterministic and grounded.
 
 ### Q9. What does `collection.query` return and which fields do you use?
 
@@ -429,7 +430,7 @@ Expected answer:
 ### Q10. How does the RAG endpoint differ from the classifier endpoint in Session 4?
 
 Expected answer:
-The Session 4 classifier endpoint calls OpenAI once — it embeds the ticket text into a chat completion with a classification prompt and parses the returned category string. The Session 5 RAG endpoint calls OpenAI twice — once to generate an embedding for retrieval (`embeddings.create`) and once to generate the suggested response (`chat.completions.create`). The classifier writes its output to the database (updating `ticket.category`). The RAG endpoint is read-only — it does not persist anything, it only computes and returns a response. The RAG endpoint also has a dependency on ChromaDB which the classifier does not.
+The Session 4 classifier endpoint calls Gemini once — it sends the ticket text in a chat completion with a classification prompt and parses the returned category string. The Session 5 RAG endpoint generates an embedding locally using sentence-transformers (no API call) and then calls Gemini once to generate the suggested response. The classifier writes its output to the database (updating `ticket.category`). The RAG endpoint is read-only — it does not persist anything, it only computes and returns a response. The RAG endpoint also has a dependency on ChromaDB and sentence-transformers which the classifier does not.
 
 ---
 
@@ -448,7 +449,7 @@ Embedding models learn a specific mapping from text to vector space during train
 ### Q13. How would you scale this RAG pipeline for a production system with 100,000 support documents?
 
 Expected answer:
-Several components would need to change at production scale. The static Python string constants would be replaced by a document ingestion pipeline reading from S3 or a database, likely run as a batch job or triggered by document updates. ChromaDB local persistent storage would be replaced by a managed vector database like Pinecone, Weaviate, or pgvector in PostgreSQL — which support distributed storage, replication, and horizontal scaling. The startup initialisation would become a separate background service. Embeddings would be generated in batches of 2048 text inputs per API call (the OpenAI batch limit) to minimise API round-trips. You would also add caching: store the query embedding and top-k results in Redis with a short TTL for common ticket types.
+Several components would need to change at production scale. The static Python string constants would be replaced by a document ingestion pipeline reading from S3 or a database, likely run as a batch job or triggered by document updates. ChromaDB local persistent storage would be replaced by a managed vector database like Pinecone, Weaviate, or pgvector in PostgreSQL — which support distributed storage, replication, and horizontal scaling. The startup initialisation would become a separate background service. Since sentence-transformers runs locally, embedding batches can be processed without API rate limits — but you would switch to a more capable model (e.g., a larger sentence-transformers variant) and possibly GPU-accelerate the encoder. You would also add caching: store the query embedding and top-k results in Redis with a short TTL for common ticket types.
 
 ### Q14. Why is source attribution important and how did you implement it?
 
@@ -465,7 +466,7 @@ Keyword search (BM25, SQL `LIKE`, Elasticsearch default) retrieves documents tha
 # Session 5 Completion Checklist
 
 - [ ] `app/knowledge_base/documents.py` exists and contains at minimum 8 document string constants covering distinct support topics
-- [ ] `app/services/rag_service.py` exists with chunking, embedding, upsert, query, and generation functions separated into distinct functions (not one monolithic function)
+- [ ] `app/services/rag_service.py` exists with chunking, embedding (sentence-transformers), upsert, query, and generation functions separated into distinct functions (not one monolithic function)
 - [ ] ChromaDB collection `support_kb` is created with `metadata={"hf:space": "cosine"}` using `PersistentClient(path="./chroma_db")`
 - [ ] Server startup initialises ChromaDB and logs the number of chunks inserted (or skips if already populated)
 - [ ] `./chroma_db` directory exists on disk after server start (confirm with `ls -la`)
@@ -481,11 +482,11 @@ Keyword search (BM25, SQL `LIKE`, Elasticsearch default) retrieves documents tha
 
 # Instructor Backup Plan
 
-If ChromaDB installation fails for multiple students or the OpenAI embedding API is unavailable:
+If ChromaDB or sentence-transformers installation fails for multiple students, or the Gemini API is unavailable:
 
 1. Instructor continues the live build on screen using their own working environment.
 2. Students follow the architecture explanation and code walkthrough conceptually without running the code.
 3. The concept pause section (95–105 min) and interview questions section remain fully executable — these require no running code.
 4. Share the complete Session 5 code after the session. Students self-build using the prompts in their own time.
 5. Do not shorten the interview discussion section. The conceptual understanding of RAG is the most interview-relevant output of this session regardless of whether the code ran locally.
-6. If only the embedding API is unavailable but ChromaDB is installed, show a mock version where embeddings are replaced with `[0.0] * 1536` dummy vectors to demonstrate the ChromaDB upsert and query flow without real semantic meaning.
+6. Since sentence-transformers runs locally, the embedding step should always be available regardless of network/API issues. If only the Gemini API is unavailable but ChromaDB and sentence-transformers are installed, demonstrate the full ingestion and retrieval flow — show that chunks are retrieved correctly — then mock the generation step with a hardcoded string to complete the endpoint demo.

@@ -190,7 +190,7 @@ Use Prompt 1 (Main Build Prompt) to generate the full feature.
 
 - Does the form show 4 inputs?
 - Are Target Role and Weak Topics pre-filled from localStorage?
-- Does clicking Generate Plan send the request to AI?
+- Does clicking Generate Plan send the request to AI? (Gemini 1.5 Flash via @google/generative-ai — free tier)
 - Is the output structured as 7 day cards?
 - Does each card show topic, questions, and mock task?
 - Is the final revision checklist rendered?
@@ -584,3 +584,13 @@ If AI tool generation fails or produces an unusable output for this session:
 4. Students use the prompts to regenerate or fix their app after class.
 5. Do not sacrifice the Concept Pause or Interview Discussion sections — the agent vs chatbot explanation is the most important takeaway.
 6. If the full plan generation fails, show a hardcoded 7-day plan as a static example so students can still build the day card UI and understand the output structure.
+
+## Gemini API Key Troubleshooting
+
+If AI calls fail during student build time:
+
+- Check that the `.env` file exists in the project root (same folder as `package.json`) and contains `VITE_GEMINI_API_KEY=your_key_here` with no extra spaces or quotes around the key value
+- The Vite dev server must be restarted after adding or editing the `.env` file — `npm run dev` again
+- The key is accessed in code as `import.meta.env.VITE_GEMINI_API_KEY` — the `VITE_` prefix is required for Vite to expose it to the browser
+- If a student hits a rate limit error: the free tier allows 15 requests per minute (RPM) — ask the student to wait 1 minute and try again
+- Keys are obtained for free at aistudio.google.com — no credit card required

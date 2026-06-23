@@ -199,6 +199,8 @@ Use the main polish prompt to review and improve the full app in one structured 
 - Does the README include all 7 features with descriptions?
 - Does the demo script follow a clear 2-minute spoken flow?
 
+Note: All AI calls in this app use Gemini 1.5 Flash via @google/generative-ai — free tier (15 RPM). If a student's AI call fails, check that the .env file has VITE_GEMINI_API_KEY set and that the Vite dev server was restarted after the .env file was added.
+
 ### Instructor Control Rule
 
 Do not let students run UI redesign prompts at this point. The focus is functional polish only. If a student asks about animations or complete UI overhaul, say: "We can do that after the session. Right now we are fixing functionality."
@@ -630,3 +632,13 @@ If AI tool generation fails or the polish prompt breaks the existing app:
 4. Students use Prompt 6 and Prompt 7 later to apply the same changes to their own app.
 5. Do not sacrifice the viva practice, demo script, and README segments — these are the most important deliverables of Session 8.
 6. If time runs short, prioritize: viva practice > README > demo script > polish code changes.
+
+## Gemini API Key Troubleshooting
+
+If a student's AI calls fail during the session:
+
+- Check that the `.env` file exists in the project root (same folder as `package.json`) and contains the line: `VITE_GEMINI_API_KEY=your_key_here`
+- The Vite dev server must be restarted after adding or editing the `.env` file — hot reload does not pick up `.env` changes.
+- Free tier limit is 15 RPM (requests per minute). If a student hits the rate limit, wait 1 minute before retrying. This is sufficient for classroom use.
+- Students can get a free key from [aistudio.google.com](https://aistudio.google.com) — Google account required, no credit card needed.
+- The `VITE_` prefix is required for Vite to expose the key to the browser. A key named `GEMINI_API_KEY` (without the prefix) will be `undefined` at runtime.

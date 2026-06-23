@@ -55,14 +55,14 @@ SQLModel DB Session — app/database.py                 ← SESSION 2
   ↓
 
 [SESSION 4 — LLM Classifier will add:]
-  On POST /tickets → OpenAI API call → category + priority written to Ticket row
+  On POST /tickets → Gemini API (gemini-1.5-flash) call → category + priority written to Ticket row
 
 [SESSION 5 — Embeddings + ChromaDB will add:]
   On POST /tickets → embed ticket text → store in ChromaDB
   On GET /tickets/search → embed query → ChromaDB similarity search
 
 [SESSION 6 — RAG will add:]
-  LangChain retriever queries ChromaDB → augments prompt → OpenAI generates resolution suggestion
+  LangChain retriever queries ChromaDB → augments prompt → Gemini API (gemini-1.5-flash) generates resolution suggestion
 
 [SESSION 7 — LangGraph Agent will add:]
   Complex tickets routed through LangGraph graph → multi-step reasoning → structured resolution output
@@ -280,7 +280,7 @@ In Session 4, we will add the first AI feature:
 
 ## LLM Ticket Classifier
 
-When a user submits a new ticket via `POST /tickets`, the API will send the ticket's title and description to the OpenAI Chat Completions API and automatically classify:
+When a user submits a new ticket via `POST /tickets`, the API will send the ticket's title and description to the Gemini API (gemini-1.5-flash) and automatically classify:
 
 - **Category**: billing / technical / account / general
 - **Priority**: low / medium / high

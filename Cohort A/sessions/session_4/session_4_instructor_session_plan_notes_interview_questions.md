@@ -193,6 +193,7 @@ Use the prompt prepared in the pre-session file. The prompt includes:
 - Is there a regenerate button?
 - Are the generated questions actually tied to the JD and profile, not generic?
 - Is the loading state shown during generation?
+- Is the AI call using Gemini 1.5 Flash via @google/generative-ai — free tier? (Gemini 1.5 Flash via @google/generative-ai — free tier)
 
 ### Instructor Control Rule
 
@@ -210,7 +211,7 @@ Help students understand what AI generated and how it uses context.
 
 1. Where is the context assembled from app state
 2. How the chained prompt is constructed (show the actual prompt string being built)
-3. Where the AI call is made
+3. Where the AI call is made (Gemini 1.5 Flash via @google/generative-ai — free tier)
 4. How the response is parsed into four categories
 5. How collapsible sections are rendered
 6. Where the copy button logic lives
@@ -564,3 +565,14 @@ If AI tool generation fails or setup issues take too long:
 4. Share the final Session 4 code after the session.
 5. Students use the prompts later to regenerate or fix their version.
 6. Do not sacrifice the concept pause or interview discussion sections — the conceptual understanding of prompt chaining is non-negotiable for this session.
+
+## Gemini API Troubleshooting
+
+If AI calls fail during Session 4:
+
+- Check that the `.env` file exists in the project root (same folder as `package.json`) and contains `VITE_GEMINI_API_KEY=...` with a valid key
+- Restart the Vite dev server after adding or editing the `.env` file — Vite does not hot-reload env changes
+- The key is obtained free from aistudio.google.com — no credit card required
+- Free tier limit is 15 RPM — if a student hits the rate limit, ask them to wait 1 minute and try again
+- If the key is set but the call still fails, check the browser console for a 400 or 403 error — this usually means the key was pasted incorrectly or has extra whitespace
+- Confirm the import is correct: `import { GoogleGenerativeAI } from "@google/generative-ai"` and the model is `"gemini-1.5-flash"`

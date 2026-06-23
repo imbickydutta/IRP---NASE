@@ -200,7 +200,7 @@ Use the main build prompt to generate the match feature on top of the existing a
 - Does the code read from localStorage for the student profile?
 - Does it read the JD analysis from app state?
 - Is the comparison prompt clearly labeled with two contexts?
-- Does the AI call return match band, matched skills, missing skills, suggestions, and risk areas?
+- Does the AI call (Gemini 1.5 Flash via @google/generative-ai — free tier) return match band, matched skills, missing skills, suggestions, and risk areas?
 - Is there a loading state?
 - Is there an empty state when profile or JD is missing?
 - Is the report card displayed cleanly?
@@ -605,3 +605,13 @@ If the AI tool generation fails or student setup issues take too long:
 4. Students use the provided prompts later to regenerate or fix their app.
 5. Do not sacrifice the Concept Pause or the interview discussion section — these are the most important parts for placement readiness.
 6. If AI is generating but slowly, use the wait time to walk through the comparison prompt structure on the whiteboard or shared screen and explain context labeling in detail.
+
+### Gemini API Key Troubleshooting
+
+If a student's AI calls are failing, check these in order:
+
+- Confirm the `.env` file exists in the project root (same folder as `package.json`) and contains `VITE_GEMINI_API_KEY=...` with no extra spaces or quotes around the key
+- Confirm the student restarted the Vite dev server after creating or editing the `.env` file — changes to `.env` are not picked up automatically
+- Confirm the student installed the package: `npm install @google/generative-ai` must have been run in the project folder
+- If the student hits a rate limit error: the free tier allows 15 requests per minute — ask the student to wait 1 minute and try again
+- If the key itself is invalid: the student should return to aistudio.google.com, copy the key again, and paste it fresh into the `.env` file

@@ -103,7 +103,7 @@ Confirm students have the following from Session 7:
 - All routes protected by JWT middleware in `app/auth.py`
 - LangGraph workflow in `app/graph.py` with at minimum: classify node, retrieve node, suggest node
 - ChromaDB collection populated via `app/knowledge_base.py`
-- `.env` file with: `OPENAI_API_KEY`, `DATABASE_URL`, `SECRET_KEY`, `ALGORITHM`, `ACCESS_TOKEN_EXPIRE_MINUTES`
+- `.env` file with: `GEMINI_API_KEY`, `DATABASE_URL`, `SECRET_KEY`, `ALGORITHM`, `ACCESS_TOKEN_EXPIRE_MINUTES`
 
 ### Ask Students Before Moving On
 
@@ -155,12 +155,12 @@ FastAPI Router (app/main.py)
         |
         v
    LLM Classifier (app/classifier.py)
-   --> OpenAI API (gpt-4o-mini)
+   --> Gemini API (gemini-1.5-flash)
         |
         v
    RAG Retriever (app/knowledge_base.py)
    --> ChromaDB (local vector store)
-   --> OpenAI Embeddings API
+   --> sentence-transformers (all-MiniLM-L6-v2)
         |
         v
    LangGraph Agent (app/graph.py)
@@ -189,7 +189,7 @@ Every component we built has a specific job. The README needs to describe these 
 
 ### Instructor Goal
 
-Use Claude Code or Cursor to generate the documentation files. Show students how to prompt an AI coding assistant for documentation tasks, not just code tasks.
+Use Antigravity to generate the documentation files. Show students how to prompt an AI coding assistant for documentation tasks, not just code tasks.
 
 ### Step 1: Generate requirements.txt
 
@@ -199,7 +199,7 @@ In the project terminal:
 pip freeze > requirements.txt
 ```
 
-Open the file and scan for anything that should not be there (system packages, local editable installs). Ask Claude Code to clean it up if needed.
+Open the file and scan for anything that should not be there (system packages, local editable installs). Ask Antigravity to clean it up if needed.
 
 ### Step 2: Generate .env.example
 
@@ -208,7 +208,7 @@ Create a new file `.env.example` at the project root. Manually list every key fr
 Confirm the following keys are present in `.env.example`:
 
 ```
-OPENAI_API_KEY=sk-your-openai-api-key-here
+GEMINI_API_KEY=your-gemini-api-key-here
 DATABASE_URL=sqlite:///./support.db
 SECRET_KEY=your-secret-key-min-32-chars
 ALGORITHM=HS256
@@ -218,14 +218,14 @@ CHROMA_PERSIST_DIRECTORY=./chroma_db
 
 ### Step 3: Use the README Prompt from the Student File
 
-Show the student the Prompt 1 from their pre-session file and run it in Claude Code. Walk through the generated README section by section as it is produced.
+Show the student the Prompt 1 from their pre-session file and run it in Antigravity. Walk through the generated README section by section as it is produced.
 
 ### What to Watch For in Generated README
 
 - Architecture diagram must be present (Mermaid or text-based with arrows)
 - API table must list all 8-10 endpoints with method, path, auth required, and description
 - Setup instructions must reference `.env.example` not `.env`
-- AI features section must name the specific models used (gpt-4o-mini, text-embedding-3-small)
+- AI features section must name the specific models used (gemini-1.5-flash, all-MiniLM-L6-v2 via sentence-transformers)
 - Limitations section must be honest (SQLite not production-grade, no async DB driver, no horizontal scaling)
 
 ### Instructor Control Rule
@@ -238,7 +238,7 @@ Do not let students spend more than 8 minutes on README cosmetics. The content m
 
 ### Instructor Goal
 
-Read the generated files with the class. Confirm accuracy of each section. Correct any technical inaccuracies that Claude Code introduces.
+Read the generated files with the class. Confirm accuracy of each section. Correct any technical inaccuracies that Antigravity introduces.
 
 ### Walk Through README Section by Section
 
@@ -246,7 +246,7 @@ Read the generated files with the class. Confirm accuracy of each section. Corre
 2. **Architecture Diagram** — Does the diagram show all 6 layers: FastAPI, Auth, SQLModel, LLM, RAG, LangGraph?
 3. **API Reference Table** — Are all endpoints listed? Is the auth requirement accurate for each?
 4. **Setup Instructions** — Can a stranger follow these steps and get the app running in under 10 minutes?
-5. **AI Features** — Are the model names specific (not just "OpenAI")? Are embeddings mentioned?
+5. **AI Features** — Are the model names specific (not just "Gemini")? Are embeddings mentioned?
 6. **Limitations** — Is SQLite's limitation mentioned? Is the missing async DB driver mentioned?
 7. **Future Improvements** — Are concrete improvements listed (PostgreSQL, Docker, async SQLAlchemy)?
 
@@ -257,9 +257,9 @@ Read the generated files with the class. Confirm accuracy of each section. Corre
 - "What does the LangGraph graph actually do? Can you describe the node sequence?"
 - "Why is SQLite a limitation in production?"
 
-### Common Inaccuracy Claude Code Will Introduce
+### Common Inaccuracy Antigravity Will Introduce
 
-Claude Code sometimes lists endpoints that do not exist or omits real endpoints. Cross-check the API table against `app/routes/tickets.py` and `app/routes/users.py` with students in real time.
+Antigravity sometimes lists endpoints that do not exist or omits real endpoints. Cross-check the API table against `app/routes/tickets.py` and `app/routes/users.py` with students in real time.
 
 ---
 
@@ -271,7 +271,7 @@ Students independently:
 
 1. Run `pip freeze > requirements.txt` in their project terminal
 2. Create `.env.example` manually based on their `.env`
-3. Run the README prompt in Claude Code and generate their README
+3. Run the README prompt in Antigravity and generate their README
 4. Insert or adjust the architecture diagram for their specific project state
 5. Add a `.gitignore` entry for `.env` and `support.db` if not already present
 
@@ -402,7 +402,7 @@ Teach students the vocabulary they need to explain this system in a system desig
 "Our current system uses SQLite, which cannot handle concurrent writes. If we had 1000 users, the DB would become a bottleneck. We would scale by replacing SQLite with PostgreSQL and using an async DB driver like asyncpg."
 
 **Bottleneck**
-"The LLM API call in the suggest endpoint is our biggest latency bottleneck. Every GET /tickets/{id}/suggest makes a synchronous HTTP call to OpenAI. We could cache suggestion results in Redis to avoid repeated LLM calls for the same ticket."
+"The LLM API call in the suggest endpoint is our biggest latency bottleneck. Every GET /tickets/{id}/suggest makes a synchronous HTTP call to the Gemini API. We could cache suggestion results in Redis to avoid repeated LLM calls for the same ticket."
 
 **Trade-off**
 "We chose SQLite over PostgreSQL because it requires zero infrastructure for development and demo purposes. The trade-off is that it cannot handle concurrent writes and is not suitable for production load."
@@ -460,7 +460,7 @@ In 8 sessions, you went from zero to a deployed AI backend system. Let us count 
 - Session 1: FastAPI CRUD API for support tickets
 - Session 2: SQLModel + SQLite data layer with proper ORM models
 - Session 3: JWT authentication with role-based access control
-- Session 4: LLM ticket classifier using OpenAI
+- Session 4: LLM ticket classifier using Gemini
 - Session 5: RAG knowledge base using ChromaDB and embeddings
 - Session 6: LangGraph agentic workflow
 - Session 7: Pytest coverage, custom evals, and guardrails
@@ -479,7 +479,7 @@ Add the live Railway URL to your README. Push the final README and requirements.
 ## What to Emphasize
 
 1. The README is part of the engineering deliverable — it is not optional documentation. Every professional project has one.
-2. `.env.example` is a security best practice. Students who commit their `.env` file to a public GitHub repo will expose their OpenAI API key. Emphasize this strongly.
+2. `.env.example` is a security best practice. Students who commit their `.env` file to a public GitHub repo will expose their Gemini API key. Emphasize this strongly.
 3. Railway's `$PORT` environment variable must be used in the start command — this is the single most common deployment failure.
 4. The architecture diagram is the most useful interview preparation tool in the whole README. Interviewers often ask students to "walk me through the architecture."
 5. The demo script is a rehearsed narrative — not improvised. Students should know the exact sequence of API calls and what to say at each step.
@@ -489,7 +489,7 @@ Add the live Railway URL to your README. Push the final README and requirements.
 
 ## Common Student Mistakes
 
-1. **Committing `.env` to GitHub** — Student runs `git add .` and pushes the real `.env` file. Their OpenAI API key is now public. Fix: add `.env` to `.gitignore` before the first commit. If already committed, rotate the key immediately in the OpenAI dashboard.
+1. **Committing `.env` to GitHub** — Student runs `git add .` and pushes the real `.env` file. Their Gemini API key is now public. Fix: add `.env` to `.gitignore` before the first commit. If already committed, rotate the key immediately in the Google AI Studio dashboard.
 
 2. **Railway start command error: `uvicorn: command not found`** — Student's `requirements.txt` is missing `uvicorn`. Fix: confirm `uvicorn[standard]` is in `requirements.txt`. Railway installs from this file, so if uvicorn is missing, the server cannot start.
 
@@ -507,7 +507,7 @@ Add the live Railway URL to your README. Push the final README and requirements.
 
 9. **LangGraph import error on Railway: `ImportError: cannot import name 'StateGraph' from 'langgraph'`** — The `langgraph` version in `requirements.txt` is pinned to an old version that has a different API. Fix: ensure the version pinned in `requirements.txt` matches the version that was used locally during Session 6.
 
-10. **README architecture diagram is missing or incorrect** — Claude Code sometimes generates a high-level diagram that omits ChromaDB or LangGraph. Walk students through cross-checking every component in the diagram against the actual codebase.
+10. **README architecture diagram is missing or incorrect** — Antigravity sometimes generates a high-level diagram that omits ChromaDB or LangGraph. Walk students through cross-checking every component in the diagram against the actual codebase.
 
 ## How to Control the Session
 
@@ -561,13 +561,13 @@ When a user calls POST /auth/token with their username and password, the server 
 
 Expected answer:
 
-The request hits the FastAPI router in `app/routes/tickets.py`. The JWT dependency runs first — it decodes the Authorization header, verifies the token signature with `SECRET_KEY`, and extracts the user identity. The route handler fetches the ticket from SQLite using SQLModel's session and the ticket ID. It constructs a classification prompt using the ticket's subject and description, then calls `openai.chat.completions.create` with the `gpt-4o-mini` model. The system prompt instructs the model to return exactly one of: billing, technical, account, or general. The LLM response is parsed, and the ticket's `category` field is updated in the database. The route returns the updated ticket object with the new category.
+The request hits the FastAPI router in `app/routes/tickets.py`. The JWT dependency runs first — it decodes the Authorization header, verifies the token signature with `SECRET_KEY`, and extracts the user identity. The route handler fetches the ticket from SQLite using SQLModel's session and the ticket ID. It constructs a classification prompt using the ticket's subject and description, then calls the Gemini API with the `gemini-1.5-flash` model. The system prompt instructs the model to return exactly one of: billing, technical, account, or general. The LLM response is parsed, and the ticket's `category` field is updated in the database. The route returns the updated ticket object with the new category.
 
 ### Q7. How does the RAG retrieval work at the code level?
 
 Expected answer:
 
-When GET /tickets/{id}/suggest is called, the LangGraph agent is invoked. In the retrieve node, the ticket's description is embedded using `openai.embeddings.create` with the `text-embedding-3-small` model, which returns a 1536-dimensional float vector. This vector is passed to ChromaDB's `collection.query()` method with `n_results=3`. ChromaDB performs a cosine similarity search and returns the 3 most similar documents from the knowledge base. These documents are concatenated into a context string and stored in the LangGraph state, where the suggest node uses them to build the final LLM prompt.
+When GET /tickets/{id}/suggest is called, the LangGraph agent is invoked. In the retrieve node, the ticket's description is embedded using `sentence-transformers` with the `all-MiniLM-L6-v2` model, which returns a 384-dimensional float vector. This vector is passed to ChromaDB's `collection.query()` method with `n_results=3`. ChromaDB performs a cosine similarity search and returns the 3 most similar documents from the knowledge base. These documents are concatenated into a context string and stored in the LangGraph state, where the suggest node uses them to build the final LLM prompt.
 
 ### Q8. What does your SQLModel data model look like for a ticket?
 
@@ -595,7 +595,7 @@ Tests live in the `tests/` directory. We use a `conftest.py` that creates a fres
 
 Expected answer:
 
-There are two primary bottlenecks. First, SQLite does not support concurrent writes — under load, multiple simultaneous POST requests will result in `OperationalError: database is locked`. The fix is to migrate to PostgreSQL with an async driver like `asyncpg` and use SQLModel's async session. Second, every call to GET /tickets/{id}/suggest makes a synchronous HTTP request to the OpenAI API, which adds 500ms to 2s of latency per request and blocks the FastAPI event loop if not handled with `asyncio`. The fix is to make LLM calls async using the `openai` library's async client or to cache suggestion results in Redis for tickets that have already been processed.
+There are two primary bottlenecks. First, SQLite does not support concurrent writes — under load, multiple simultaneous POST requests will result in `OperationalError: database is locked`. The fix is to migrate to PostgreSQL with an async driver like `asyncpg` and use SQLModel's async session. Second, every call to GET /tickets/{id}/suggest makes a synchronous HTTP request to the Gemini API, which adds 500ms to 2s of latency per request and blocks the FastAPI event loop if not handled with `asyncio`. The fix is to make LLM calls async using the `google-generativeai` library's async client or to cache suggestion results in Redis for tickets that have already been processed.
 
 ### Q12. Why is SQLite acceptable for this project but not for production?
 
@@ -619,7 +619,7 @@ A chain is a script — it runs the same steps in the same order every time, reg
 
 Expected answer:
 
-Several changes would be required at that scale. First, replace SQLite with PostgreSQL and use async SQLAlchemy with a connection pool. Second, move LLM calls off the synchronous request path — instead of calling OpenAI inline, push ticket IDs to a task queue (Celery + Redis or AWS SQS) and process classification and suggestion asynchronously. The API would return immediately with a "processing" status, and a webhook or polling endpoint would deliver the result when ready. Third, replace the local ChromaDB instance with a hosted vector database like Pinecone or Weaviate that supports horizontal scaling and replication. Fourth, add structured logging with correlation IDs so every ticket's processing pipeline can be traced end-to-end.
+Several changes would be required at that scale. First, replace SQLite with PostgreSQL and use async SQLAlchemy with a connection pool. Second, move LLM calls off the synchronous request path — instead of calling the Gemini API inline, push ticket IDs to a task queue (Celery + Redis or AWS SQS) and process classification and suggestion asynchronously. The API would return immediately with a "processing" status, and a webhook or polling endpoint would deliver the result when ready. Third, replace the local ChromaDB instance with a hosted vector database like Pinecone or Weaviate that supports horizontal scaling and replication. Fourth, add structured logging with correlation IDs so every ticket's processing pipeline can be traced end-to-end.
 
 ---
 

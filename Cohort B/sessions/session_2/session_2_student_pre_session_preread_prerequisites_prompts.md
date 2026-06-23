@@ -295,7 +295,7 @@ __pycache__/
 
 # Prompts for Session 2
 
-Use these prompts during the session when instructed by the instructor. All prompts are designed for Claude Code or Cursor. Paste them directly.
+Use these prompts during the session when instructed by the instructor. All prompts are designed for Antigravity. Paste them directly.
 
 ---
 

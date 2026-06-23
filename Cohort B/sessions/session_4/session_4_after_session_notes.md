@@ -7,10 +7,10 @@ In Session 4 we extended the AI Support Ticket Resolution Copilot backend with L
 The new components built today:
 
 - `app/models/ticket_classification.py` — SQLModel table `TicketClassification` with `ticket_id` foreign key, storing `category`, `priority`, `sentiment`, `urgency_score`, `summary`, and `suggested_team`
-- `app/services/llm_classifier.py` — `classify_ticket(title, description)` function that calls the OpenAI Chat Completions API with a structured system prompt, `response_format={"type": "json_object"}`, and `temperature=0.1`
+- `app/services/llm_classifier.py` — `classify_ticket(title, description)` function that calls the Gemini 1.5 Flash API via `google-generativeai` with a structured prompt, `response_mime_type="application/json"` in the `GenerationConfig`, and `temperature=0.1`
 - Updated `app/routes/tickets.py` — `POST /tickets` now saves the ticket, calls the classifier, saves the classification, and returns both in the response
 - Updated response schema — `TicketReadWithClassification` Pydantic model with an optional nested `ClassificationOut` model
-- pytest tests using `unittest.mock.patch` to mock the OpenAI client, covering the success path and the graceful degradation path
+- pytest tests using `unittest.mock.patch` to mock `google.generativeai.GenerativeModel.generate_content`, covering the success path and the graceful degradation path
 
 The feature degrades gracefully: if the LLM call fails for any reason, the ticket saves successfully and the classification fields in the response are `null`.
 
@@ -59,10 +59,10 @@ Client Request: POST /tickets (Bearer token in Authorization header)
      v
 [LLM Classifier: app/services/llm_classifier.py]         [Session 4 — NEW]
   - classify_ticket(title, description) called
-  - OpenAI client initialized (reads OPENAI_API_KEY from env)
-  - chat.completions.create() sends HTTP POST to api.openai.com
-    with model, temperature=0.1, response_format=json_object, messages
-  - response.choices[0].message.content is a JSON string
+  - genai.configure(api_key=os.environ["GEMINI_API_KEY"]) initializes client
+  - model.generate_content(prompt) sends HTTP POST to Gemini API
+    with model="gemini-1.5-flash", temperature=0.1, response_mime_type="application/json"
+  - response.text is a JSON string
   - json.loads() parses it to dict
   - try/except catches all failures → returns None on any error
      |
@@ -98,23 +98,23 @@ Client Request: POST /tickets (Bearer token in Authorization header)
 
 # Technical Deep-Dive: LLM API Integration, Structured JSON Output, and Prompt Engineering
 
-The OpenAI Chat Completions API (`chat.completions.create`) accepts a list of messages where each message has a `role` (`system`, `user`, or `assistant`) and `content` (a string). The `system` message sets the persistent instruction context for the model — everything in it is treated as the model's operating instructions, not as user input. For classification, the system message does the heavy lifting: it defines the task, the output structure, and the constraints. The `user` message contains the actual ticket content to classify. The model processes both and generates a response that satisfies the system instructions applied to the user content. Setting `response_format={"type": "json_object"}` is a strict API-level guarantee — the model's output will be a valid JSON string that can be parsed with `json.loads()` without catching `json.JSONDecodeError` from structural issues. Note that JSON mode only guarantees syntactic validity, not semantic correctness — the model can still return `"category": "Payment"` (wrong value) even if the JSON is valid. That is why explicit enumeration of allowed values in the system prompt, combined with post-parse validation in Python, is the production-correct approach.
+The Gemini 1.5 Flash API (`model.generate_content`) accepts a prompt string that combines system instructions and user content. For classification, the prompt does the heavy lifting: it defines the task, the output structure, and the constraints, followed by the actual ticket content to classify. The model processes the full prompt and generates a response. Setting `response_mime_type="application/json"` inside `genai.GenerationConfig` is a strict API-level guarantee — the model's output will be a valid JSON string that can be parsed with `json.loads()` without catching `json.JSONDecodeError` from structural issues. The response is accessed via `response.text`. Note that JSON output mode only guarantees syntactic validity, not semantic correctness — the model can still return `"category": "Payment"` (wrong value) even if the JSON is valid. That is why explicit enumeration of allowed values in the system prompt, combined with post-parse validation in Python, is the production-correct approach.
 
-Temperature deserves careful treatment because it is frequently misunderstood. The raw value is a divisor applied to the model's logit scores before the softmax that converts logits to probabilities. A lower temperature sharpens the probability distribution — the highest-probability token becomes even more dominant relative to alternatives. At `temperature=0`, the model becomes fully deterministic (always greedy): it picks the single most probable token at every step. At `temperature=1`, the raw logit-derived probabilities are used unchanged. For a classification task with four categories — Billing, Technical, Account, General — the probability gap between the correct category and the next most likely one is typically large if the ticket description is clear. Low temperature ensures we always pick the dominant answer rather than occasionally sampling a lower-probability alternative. The practical effect: with `temperature=0.1`, ten identical requests should produce identical responses. With `temperature=0.9`, there will be variance across repeated calls for ambiguous inputs.
+Temperature deserves careful treatment because it is frequently misunderstood. The raw value is a divisor applied to the model's logit scores before the softmax that converts logits to probabilities. A lower temperature sharpens the probability distribution — the highest-probability token becomes even more dominant relative to alternatives. At `temperature=0`, the model becomes fully deterministic (always greedy): it picks the single most probable token at every step. At `temperature=1`, the raw logit-derived probabilities are used unchanged. For a classification task with four categories — Billing, Technical, Account, General — the probability gap between the correct category and the next most likely one is typically large if the ticket description is clear. Low temperature ensures we always pick the dominant answer rather than occasionally sampling a lower-probability alternative. The practical effect: with `temperature=0.1` in the Gemini `GenerationConfig`, ten identical requests should produce identical responses. With `temperature=0.9`, there will be variance across repeated calls for ambiguous inputs.
 
-Graceful degradation is an architectural principle: the core feature must not fail because of an enhancement. In this implementation, the ticket commit happens before the LLM call — this is not accidental, it is intentional. If the LLM call and classification commit were inside a single DB transaction with the ticket, a LLM failure would roll back the ticket insert. That would be catastrophic for a support system — a customer submits a ticket and it disappears because OpenAI had a brief outage. By committing the ticket first and treating the LLM call as a best-effort post-commit step, we guarantee that every submitted ticket is persisted. The `try/except` wrapper around the LLM call converts any exception into a `None` return, which the route handler treats as "no classification available." The response model declares classification as `Optional`, so Pydantic serializes `None` as `null` in the JSON response rather than raising a `ValidationError`. Every layer of this chain was designed with the degradation scenario in mind.
+Graceful degradation is an architectural principle: the core feature must not fail because of an enhancement. In this implementation, the ticket commit happens before the LLM call — this is not accidental, it is intentional. If the LLM call and classification commit were inside a single DB transaction with the ticket, a LLM failure would roll back the ticket insert. That would be catastrophic for a support system — a customer submits a ticket and it disappears because the Gemini API had a brief outage. By committing the ticket first and treating the LLM call as a best-effort post-commit step, we guarantee that every submitted ticket is persisted. The `try/except` wrapper around the LLM call converts any exception into a `None` return, which the route handler treats as "no classification available." The response model declares classification as `Optional`, so Pydantic serializes `None` as `null` in the JSON response rather than raising a `ValidationError`. Every layer of this chain was designed with the degradation scenario in mind.
 
 ---
 
 # What Students Should Understand
 
-1. The `openai` Python library v1.x uses `OpenAI()` client instantiation, not `openai.ChatCompletion.create()`. Any code using the old style will fail with `AttributeError` or `ImportError`. Check the installed version with `pip show openai`.
+1. The `google-generativeai` library uses `genai.configure(api_key=...)` for initialisation and `genai.GenerativeModel("gemini-1.5-flash", generation_config=genai.GenerationConfig(...))` to create the model. The response is a `GenerateContentResponse` object — access the text with `response.text`, not `response.choices[0].message.content`.
 
-2. `response_format={"type": "json_object"}` guarantees syntactically valid JSON from the model. It does not guarantee the JSON contains the expected fields or expected values. System prompt design and post-parse validation in Python are still required.
+2. `response_mime_type="application/json"` in `GenerationConfig` guarantees syntactically valid JSON from the model. It does not guarantee the JSON contains the expected fields or expected values. System prompt design and post-parse validation in Python are still required.
 
 3. The ticket must be committed to the database before the `TicketClassification` row can be inserted. SQLite and PostgreSQL both enforce foreign key constraints — inserting a `TicketClassification` row with a `ticket_id` that does not yet exist in the `ticket` table raises `IntegrityError`.
 
-4. API keys must never be hardcoded in source files. The `openai` library reads `OPENAI_API_KEY` from the process environment automatically. `python-dotenv` with `load_dotenv()` populates the environment from a `.env` file that is excluded from git via `.gitignore`.
+4. API keys must never be hardcoded in source files. Call `genai.configure(api_key=os.environ["GEMINI_API_KEY"])` after loading the environment. `python-dotenv` with `load_dotenv()` populates the environment from a `.env` file that is excluded from git via `.gitignore`. Free keys are available at aistudio.google.com.
 
 5. `temperature=0.1` is appropriate for classification because consistency across identical inputs is more important than output variety. High temperature is appropriate for creative tasks; low temperature is appropriate for deterministic tasks with a fixed output space.
 
@@ -122,9 +122,9 @@ Graceful degradation is an architectural principle: the core feature must not fa
 
 7. `json.loads()` on the model response is always required. `response.choices[0].message.content` is always a Python `str`. JSON mode guarantees it is a valid JSON string, but it is still a string — not a dict.
 
-8. The `try/except` block in `classify_ticket` should catch specific OpenAI exceptions (`openai.AuthenticationError`, `openai.RateLimitError`, `openai.APIConnectionError`) before a broad `except Exception`. Specific exception types make log messages more actionable and allow different recovery strategies per error type.
+8. The `try/except` block in `classify_ticket` should catch specific Gemini exceptions (`google.api_core.exceptions.PermissionDenied`, `google.api_core.exceptions.ResourceExhausted`, `google.api_core.exceptions.ServiceUnavailable`) before a broad `except Exception`. Specific exception types make log messages more actionable and allow different recovery strategies per error type.
 
-9. Mocking the OpenAI client in pytest with `unittest.mock.patch` is the standard approach for testing LLM-integrated code in CI pipelines. Tests that make real API calls are slow, expensive, non-deterministic, and will fail in environments without API access.
+9. Mocking Gemini in pytest with `unittest.mock.patch("google.generativeai.GenerativeModel.generate_content", ...)` is the standard approach for testing LLM-integrated code in CI pipelines. Tests that make real API calls are slow, non-deterministic, and will fail in environments without API access.
 
 10. Urgency score type coercion is necessary in practice. LLMs sometimes return numeric values as strings (`"8"` instead of `8`) despite explicit type instructions in the system prompt. Adding `int(float(result.get("urgency_score", 5)))` with range clamping is a one-line defense against this class of type inconsistency.
 
@@ -133,7 +133,7 @@ Graceful degradation is an architectural principle: the core feature must not fa
 # Interview-Ready Explanation
 
 ```text
-In Session 4, I integrated LLM-powered ticket classification into the POST /tickets endpoint of a FastAPI backend. When a ticket is created, the backend calls the OpenAI Chat Completions API with a structured system prompt and response_format=json_object, which forces the model to return a valid JSON object containing six classification fields: category, priority, sentiment, urgency_score, summary, and suggested_team. The classification result is stored in a dedicated TicketClassification SQLModel table linked to the ticket via a foreign key, and returned alongside the ticket in the 201 response. The entire LLM call is wrapped in a try/except block, and the ticket is committed to the database before the LLM call executes, so a classifier failure never blocks ticket creation — this is the graceful degradation pattern.
+In Session 4, I integrated LLM-powered ticket classification into the POST /tickets endpoint of a FastAPI backend. When a ticket is created, the backend calls the Gemini 1.5 Flash API via google-generativeai with a structured prompt and response_mime_type="application/json" in the GenerationConfig, which forces the model to return a valid JSON object containing six classification fields: category, priority, sentiment, urgency_score, summary, and suggested_team. The classification result is stored in a dedicated TicketClassification SQLModel table linked to the ticket via a foreign key, and returned alongside the ticket in the 201 response. The entire LLM call is wrapped in a try/except block, and the ticket is committed to the database before the LLM call executes, so a classifier failure never blocks ticket creation — this is the graceful degradation pattern.
 ```
 
 ---
@@ -149,9 +149,9 @@ When POST /tickets is called with a valid Bearer token and a valid request body:
 
 3. A Ticket SQLModel instance is created with the validated data and current_user.id as user_id. session.add(ticket) and session.commit() write the row to the ticket table. session.refresh(ticket) loads the DB-assigned ticket.id back into the Python object.
 
-4. classify_ticket(ticket.title, ticket.description) is called. Inside, the OpenAI client sends a POST request to https://api.openai.com/v1/chat/completions with model="gpt-4o-mini", temperature=0.1, response_format={"type": "json_object"}, and a messages list containing the system prompt and user message with the ticket content.
+4. classify_ticket(ticket.title, ticket.description) is called. Inside, the Gemini client calls model.generate_content(prompt) — the prompt combines system instructions and ticket content. The model is configured with model="gemini-1.5-flash", temperature=0.1, and response_mime_type="application/json".
 
-5. The API responds with a JSON body. response.choices[0].message.content is extracted as a string and passed to json.loads(), producing a Python dict with category, priority, sentiment, urgency_score, summary, and suggested_team.
+5. The API responds. response.text is extracted as a string and passed to json.loads(), producing a Python dict with category, priority, sentiment, urgency_score, summary, and suggested_team.
 
 6. A TicketClassification instance is created with ticket_id=ticket.id and all six classification fields. session.add(classification) and session.commit() write it to the ticket_classification table.
 
@@ -167,12 +167,12 @@ When POST /tickets is called with a valid Bearer token and a valid request body:
 ## What the AI Coding Tool Generated
 
 - The `TicketClassification` SQLModel table with all fields and FK constraint
-- The `classify_ticket` function body including the `OpenAI` client initialization, the `chat.completions.create` call, and `json.loads`
+- The `classify_ticket` function body including `genai.configure(...)`, the `model.generate_content(prompt)` call, and `json.loads(response.text)`
 - The initial system prompt content
 - The `try/except` structure around the LLM call
 - The updated `POST /tickets` route handler with classification integration
 - The `TicketReadWithClassification` and `ClassificationOut` Pydantic response models
-- The pytest test file with mocked OpenAI calls
+- The pytest test file with mocked Gemini calls
 
 ## What Engineers Are Still Responsible For
 
@@ -180,11 +180,11 @@ When POST /tickets is called with a valid Bearer token and a valid request body:
 
 2. **Verifying the commit order** — The ticket commit must happen before the LLM call. AI tools sometimes generate code that wraps everything in one transaction. Verify manually that `session.commit()` for the ticket precedes `classify_ticket()`.
 
-3. **Testing graceful degradation explicitly** — Set `OPENAI_API_KEY` to an invalid value and verify that `POST /tickets` still returns 201 with `null` classification. This is not tested automatically by the AI-generated tests unless you asked for it.
+3. **Testing graceful degradation explicitly** — Set `GEMINI_API_KEY` to an invalid value and verify that `POST /tickets` still returns 201 with `null` classification. This is not tested automatically by the AI-generated tests unless you asked for it.
 
 4. **API key security audit** — Check every file the AI modified or created. Verify no key is hardcoded anywhere. Verify `.env` is in `.gitignore`. Run `git status` to confirm `.env` is not tracked.
 
-5. **Reviewing exception specificity** — AI tools tend to generate `except Exception` as a catch-all. Replace it with specific OpenAI exception types (`openai.AuthenticationError`, `openai.RateLimitError`, `openai.APIConnectionError`) for more informative logs.
+5. **Reviewing exception specificity** — AI tools tend to generate `except Exception` as a catch-all. Replace it with specific Gemini exception types (`google.api_core.exceptions.PermissionDenied`, `google.api_core.exceptions.ResourceExhausted`, `google.api_core.exceptions.ServiceUnavailable`) for more informative logs.
 
 6. **Adding urgency_score type coercion** — AI-generated code may trust the model to return an integer. Production code should coerce and clamp: `max(1, min(10, int(float(val))))`.
 
@@ -196,22 +196,32 @@ When POST /tickets is called with a valid Bearer token and a valid request body:
 
 # Common Issues and Fixes
 
-## Issue 1: `ImportError: cannot import name 'OpenAI' from 'openai'`
+## Issue 1: `ModuleNotFoundError: No module named 'google.generativeai'`
 
-This means `openai` version 0.28.x or older is installed. The v1.x package introduced the `OpenAI()` client class. Code using `openai.ChatCompletion.create(...)` is the old style.
+This means `google-generativeai` is not installed.
 
 What to ask AI:
 
 ```text
-I am getting "ImportError: cannot import name 'OpenAI' from 'openai'". My installed version is 0.28.x.
+I am getting "ModuleNotFoundError: No module named 'google.generativeai'".
 
-Update my app/services/llm_classifier.py to use the openai v1.x client API style. The new style uses:
+Update my app/services/llm_classifier.py to use the google-generativeai library. The correct pattern is:
 
-from openai import OpenAI
-client = OpenAI()
-response = client.chat.completions.create(...)
+import google.generativeai as genai
+import json, os
 
-Replace any old-style openai.ChatCompletion.create() calls with the new pattern. Also update requirements.txt to specify openai>=1.0.0.
+genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+model = genai.GenerativeModel(
+    "gemini-1.5-flash",
+    generation_config=genai.GenerationConfig(
+        response_mime_type="application/json",
+        temperature=0.1
+    )
+)
+response = model.generate_content(prompt)
+result = json.loads(response.text)
+
+Also update requirements.txt to include google-generativeai.
 ```
 
 ## Issue 2: `sqlalchemy.exc.IntegrityError: FOREIGN KEY constraint failed` on TicketClassification insert
@@ -254,7 +264,7 @@ Update the POST /tickets route decorator to use response_model=TicketReadWithCla
 
 # Key Takeaways
 
-1. **JSON mode is mandatory for structured LLM output in production.** Free-text parsing of LLM responses using regex or string splitting is fragile and breaks on minor model updates. `response_format={"type": "json_object"}` is a guaranteed contract at the API level. Combine it with a tightly-written system prompt that enumerates allowed values and specifies types — and add post-parse validation in Python for defense-in-depth.
+1. **JSON output mode is mandatory for structured LLM output in production.** Free-text parsing of LLM responses using regex or string splitting is fragile and breaks on minor model updates. `response_mime_type="application/json"` in the Gemini `GenerationConfig` is a guaranteed contract at the API level. Combine it with a tightly-written system prompt that enumerates allowed values and specifies types — and add post-parse validation in Python for defense-in-depth.
 
 2. **Commit order is a correctness requirement, not just a style preference.** In any multi-step database flow where rows reference each other via foreign keys, the parent row must be committed before the child row is inserted. In the Session 4 flow, Ticket is the parent and TicketClassification is the child. Getting this order wrong causes an `IntegrityError` that is misleading to debug if you do not understand the FK constraint being violated.
 
@@ -268,11 +278,11 @@ Update the POST /tickets route decorator to use response_model=TicketReadWithCla
 
 In Session 5 we will add the RAG Knowledge Base.
 
-The backend will maintain a vector store (ChromaDB) containing support articles, past ticket resolutions, and internal documentation. When a ticket is created, the ticket description will be embedded using OpenAI's `text-embedding-3-small` model, and ChromaDB will be queried for the most semantically similar knowledge entries. The top results will be attached to the ticket response as `suggested_resolutions`.
+The backend will maintain a vector store (ChromaDB) containing support articles, past ticket resolutions, and internal documentation. When a ticket is created, the ticket description will be embedded using a local `SentenceTransformer("all-MiniLM-L6-v2")` model (no API key required, 384-dim vectors), and ChromaDB will be queried for the most semantically similar knowledge entries. The top results will be attached to the ticket response as `suggested_resolutions`.
 
 Session 5 will introduce:
 - `chromadb` Python client and collection management
-- OpenAI Embeddings API (`embeddings.create`)
+- Local sentence-transformers embeddings (`SentenceTransformer("all-MiniLM-L6-v2")`) — no API key required, 384-dim vectors
 - Cosine similarity and why it is the right distance metric for semantic search
 - ChromaDB `collection.query(query_embeddings=..., n_results=3)` return structure
 - A new `KnowledgeArticle` SQLModel table for storing article metadata

@@ -25,7 +25,7 @@ An AI system without tests, evals, and guardrails is a prototype, not a product.
 
 **Tests** catch regressions. When a developer changes the ticket schema, renames a field, or modifies a route handler, the pytest suite will fail within seconds and prevent a broken deployment. Without tests, a breaking change might only be discovered when a user reports a bug in production.
 
-**Evals** catch quality degradation. When you upgrade the OpenAI model, change the system prompt, add new documents to ChromaDB, or modify the retrieval chunk size, the groundedness score can drop significantly — meaning the LLM starts generating responses from its training data instead of from the retrieved context. Unit tests cannot detect this. Only an eval function that measures the semantic relationship between the response and the retrieved chunks can.
+**Evals** catch quality degradation. When you upgrade the Gemini model, change the system prompt, add new documents to ChromaDB, or modify the retrieval chunk size, the groundedness score can drop significantly — meaning the LLM starts generating responses from its training data instead of from the retrieved context. Unit tests cannot detect this. Only an eval function that measures the semantic relationship between the response and the retrieved chunks can.
 
 **Guardrails** catch unsafe runtime behavior. Even a well-tuned LLM can produce harmful output under adversarial input, unusual ticket text, or edge cases the system prompt did not anticipate. Guardrails provide a deterministic safety net that does not depend on the LLM's own judgment about whether its output is safe.
 
@@ -51,7 +51,7 @@ Database Layer (app/db/) [Session 2]
   Ticket table: id, title, description, status, category, priority, summary, created_at, updated_at
   ↓
 LLM Classifier (app/llm/classifier.py) [Session 4]
-  classify_ticket(ticket_text) → OpenAI chat.completions.create with structured prompt
+  classify_ticket(ticket_text) → Gemini API (gemini-1.5-flash) generate_content with structured prompt
   Returns: {"category": str, "priority": str, "summary": str}
   ↓
 LangGraph Workflow (app/graph/) [Session 6]
@@ -61,7 +61,7 @@ LangGraph Workflow (app/graph/) [Session 6]
     calls classify_ticket() → sets state["category"], state["priority"], state["summary"]
   ↓
   retrieve_node:
-    embeds ticket_text with OpenAI embeddings
+    embeds ticket_text with sentence-transformers (all-MiniLM-L6-v2)
     queries ChromaDB collection → returns top N chunks + distances [Session 5]
     sets state["retrieved_chunks"], state["confidence"] (from similarity score)
   ↓
@@ -132,7 +132,7 @@ The guardrail in `generate_node` operates in two phases. The first phase is pre-
 
 8. Pytest fixture scope matters: `scope="function"` creates a fresh database per test; `scope="module"` reuses the database across a test module — using the wrong scope causes test interdependence and non-deterministic failures
 
-9. The classifier test uses `pytest.mark.skipif` to conditionally skip when `OPENAI_API_KEY` is not set — this is the correct pattern for tests that depend on external services that may not be available in all environments
+9. The classifier test uses `pytest.mark.skipif` to conditionally skip when `GEMINI_API_KEY` is not set — this is the correct pattern for tests that depend on external services that may not be available in all environments
 
 10. Session 7 features do not change the LangGraph graph topology, API routes, or database schema — they add a testing layer, an eval layer, and a safety layer on top of the existing architecture
 
@@ -156,8 +156,8 @@ In Session 7, I added three quality control layers to the AI Support Ticket Reso
 3. The handler builds a TicketState TypedDict with ticket_text set to the ticket's description (and optionally title).
 
 4. app.graph.graph.invoke(ticket_state) runs the compiled LangGraph StateGraph:
-   a. classify_node calls classify_ticket(ticket_text) — an OpenAI chat completion call with a structured prompt — and sets category, priority, and summary in state.
-   b. retrieve_node embeds the ticket text using OpenAI's text-embedding-ada-002 (or configured model), calls collection.query() on the ChromaDB collection, retrieves the top N chunks, and computes confidence_score from the top document's cosine similarity score (1 - distance).
+   a. classify_node calls classify_ticket(ticket_text) — a Gemini API (gemini-1.5-flash) generate_content call with a structured prompt — and sets category, priority, and summary in state.
+   b. retrieve_node embeds the ticket text using sentence-transformers (all-MiniLM-L6-v2), calls collection.query() on the ChromaDB collection, retrieves the top N chunks, and computes confidence_score from the top document's cosine similarity score (1 - distance).
    c. route_node checks if confidence_score >= threshold. If yes, it routes to generate_node. If no, it sets a low-confidence fallback response and ends the graph.
    d. generate_node constructs messages with system_prompt = BASE_SYSTEM_PROMPT + GUARDRAIL_INSTRUCTIONS, calls llm.invoke() with the ticket text and retrieved chunks, checks the output for guardrail trigger patterns, and either returns the LLM response or SAFE_FALLBACK_RESPONSE.
 
@@ -172,7 +172,7 @@ In Session 7, I added three quality control layers to the AI Support Ticket Reso
 
 # What AI Was Used For + What Engineers Must Still Do
 
-## What AI (Claude Code / Cursor) Was Used For
+## What AI (Antigravity) Was Used For
 
 - Generating the `tests/conftest.py` fixture with the correct `dependency_overrides` pattern
 - Generating the full `tests/test_tickets.py` test file with correctly scoped assertions

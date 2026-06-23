@@ -21,7 +21,7 @@ This is a production-style FastAPI backend that handles customer support tickets
 - **Session 1** — Core Ticket CRUD API: `POST /tickets`, `GET /tickets`, `GET /tickets/{id}`, `PUT /tickets/{id}`, `DELETE /tickets/{id}`
 - **Session 2** — Database Layer: SQLite via SQLModel, Alembic migrations, `Ticket` and `User` models
 - **Session 3** — Auth Layer: JWT login, `POST /auth/register`, `POST /auth/login`, `get_current_user` dependency, role-based access
-- **Session 4** — LLM Classifier: On `POST /tickets`, an OpenAI chat completion classifies the ticket into one of 6 categories and stores it in the `category` column
+- **Session 4** — LLM Classifier: On `POST /tickets`, a Gemini 1.5 Flash chat completion classifies the ticket into one of 6 categories and stores it in the `category` column
 
 ## Session 5 Goal
 
@@ -29,10 +29,10 @@ Add a complete RAG (Retrieval-Augmented Generation) pipeline that:
 
 1. Stores a static knowledge base of support policy documents as Python string constants
 2. Chunks those documents by paragraph
-3. Embeds the chunks using OpenAI `text-embedding-3-small`
+3. Embeds the chunks using sentence-transformers `all-MiniLM-L6-v2` (local, no API key required)
 4. Stores vectors in a local persistent ChromaDB collection
 5. At request time, retrieves the top-3 relevant chunks for any ticket
-6. Generates a grounded suggested response using the retrieved context
+6. Generates a grounded suggested response using Gemini 1.5 Flash with the retrieved context
 7. Exposes this via `GET /tickets/{id}/suggested-response`
 
 ## Session 5 Output
@@ -53,7 +53,7 @@ By the end of Session 5, hitting `GET /tickets/{id}/suggested-response` in Swagg
 
 ## Why Are We Adding This Feature Now?
 
-Session 4 proved the LLM can understand ticket text (classification). But classification is labelling — the LLM has no access to your company's specific policies. If you ask GPT "what is our refund window?" without giving it the actual policy, it will guess or hallucinate a plausible-sounding answer.
+Session 4 proved the LLM can understand ticket text (classification). But classification is labelling — the LLM has no access to your company's specific policies. If you ask Gemini "what is our refund window?" without giving it the actual policy, it will guess or hallucinate a plausible-sounding answer.
 
 RAG solves this by separating two concerns:
 
@@ -73,18 +73,18 @@ Authentication Middleware (get_current_user → JWT decode → User lookup)
         ↓
 Route Handler
         ├─→ [POST /tickets] → LLM Classifier (app/services/classifier.py)
-        │                              ↓ openai.chat.completions.create
+        │                              ↓ Gemini 1.5 Flash generate_content()
         │                         category string → save to DB
         │
         ├─→ [GET /tickets/{id}/suggested-response] → RAG Service (app/services/rag_service.py)   ← NEW SESSION 5
         │       ↓                                            ↓
-        │  Load Ticket from DB                   Embed ticket text (text-embedding-3-small)
+        │  Load Ticket from DB                   Embed ticket text (sentence-transformers local)
         │                                                    ↓
         │                                       Query ChromaDB (cosine similarity top-3)
         │                                                    ↓
         │                                       Retrieved chunks injected into LLM prompt
         │                                                    ↓
-        │                                       openai.chat.completions.create (gpt-4o-mini)
+        │                                       Gemini 1.5 Flash generate_content()
         │                                                    ↓
         │                                       Return suggested_response + sources
         │
@@ -108,16 +108,19 @@ If collection already has items: skip (idempotent)
 
 ## Key Concepts to Revise Before This Session
 
-### 1. OpenAI Embeddings API
+### 1. sentence-transformers (Local Embeddings)
 
-You already used `openai.chat.completions.create` in Session 4. Embeddings use a different endpoint: `openai.embeddings.create`. Review the response structure:
+Instead of a cloud API, we use the `sentence-transformers` library which runs an embedding model entirely on your machine — no API key, no cost, no network call. Install it with `pip install sentence-transformers`. Review the usage:
 
 ```python
-response = client.embeddings.create(input=["hello world"], model="text-embedding-3-small")
-vector = response.data[0].embedding  # list of 1536 floats
+from sentence_transformers import SentenceTransformer
+embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+vectors = embedding_model.encode(["hello world", "another text"])  # NumPy array
+vector_list = vectors.tolist()  # convert to plain Python list for ChromaDB
+# each vector is a list of 384 floats
 ```
 
-The `input` parameter accepts a list of strings — you can embed multiple texts in one API call (batch embedding).
+The model is downloaded once (~90MB) on first use and cached locally. You can embed a list of strings in a single call (batch embedding).
 
 ### 2. Cosine Similarity
 
@@ -201,29 +204,31 @@ Run this before the session:
 
 ```bash
 pip install chromadb
-pip install --upgrade openai
+pip install sentence-transformers
+pip install --upgrade google-generativeai
 ```
 
 Verify installation:
 
 ```bash
 python -c "import chromadb; print(chromadb.__version__)"
-python -c "import openai; print(openai.__version__)"
+python -c "from sentence_transformers import SentenceTransformer; print('sentence-transformers OK')"
+python -c "import google.generativeai; print('google-generativeai OK')"
 ```
 
 ChromaDB requires Python 3.8+. If you are on Python 3.12, use `chromadb>=0.4.0`.
 
-Also ensure `chromadb` is added to your `requirements.txt`.
+Also ensure `chromadb` and `sentence-transformers` are added to your `requirements.txt`.
 
 ## Environment Setup
 
-Confirm your `.env` file has a valid OpenAI API key:
+Confirm your `.env` file has a valid Gemini API key:
 
 ```
-OPENAI_API_KEY=sk-...
+GEMINI_API_KEY=your_key_here
 ```
 
-The Session 5 code calls the OpenAI Embeddings API (`text-embedding-3-small`) at server startup. If the key is missing, the server will start but knowledge base ingestion will fail with `openai.AuthenticationError`.
+Get a free key at aistudio.google.com (no credit card required). The Session 5 code uses sentence-transformers for embeddings (no API key needed — runs locally) and calls the Gemini API only for chat completion. If the Gemini key is missing, the server will start and the knowledge base will initialise successfully (embeddings are local), but the generation step will fail when you hit the endpoint.
 
 ## Code State from Session 4
 
@@ -243,7 +248,7 @@ your_project/
 │   │   └── auth.py                (register, login)
 │   └── services/
 │       └── classifier.py          (LLM-based category classifier)
-├── .env                           (OPENAI_API_KEY)
+├── .env                           (GEMINI_API_KEY)
 ├── requirements.txt
 └── support_tickets.db             (SQLite DB file from previous sessions)
 ```
@@ -309,7 +314,7 @@ Use these prompts during the session when instructed by your instructor.
 ## Prompt 1: Main Build Prompt
 
 ```text
-I am building an AI Support Ticket Resolution Copilot using FastAPI, SQLModel, and OpenAI.
+I am building an AI Support Ticket Resolution Copilot using FastAPI, SQLModel, Gemini (google-generativeai), and sentence-transformers.
 The project is a Python backend. Here is the current state of the codebase:
 
 Existing files and what they contain:
@@ -320,7 +325,7 @@ Existing files and what they contain:
 - app/models/user.py — User SQLModel table with id, email, hashed_password, role
 - app/routes/tickets.py — CRUD endpoints: POST /tickets (calls classifier), GET /tickets, GET /tickets/{id}, PUT /tickets/{id}, DELETE /tickets/{id}
 - app/routes/auth.py — POST /auth/register, POST /auth/login returning JWT
-- app/services/classifier.py — calls openai.chat.completions.create to classify ticket into a category string
+- app/services/classifier.py — calls Gemini 1.5 Flash generate_content() to classify ticket into a category string
 
 Add a complete RAG pipeline with the following exact files and structure:
 
@@ -333,18 +338,19 @@ FILE 1: app/knowledge_base/documents.py
 - Add a constant DOCUMENTS: dict[str, str] at the bottom that maps a short document name to each constant (e.g., {"refund_policy": REFUND_POLICY, "login_troubleshooting": LOGIN_TROUBLESHOOTING_GUIDE, ...})
 
 FILE 2: app/services/rag_service.py
-- Import: chromadb, openai, os
+- Import: chromadb, os, google.generativeai as genai, SentenceTransformer from sentence_transformers
 - Use chromadb.PersistentClient(path="./chroma_db")
 - Collection name: "support_kb" with metadata={"hf:space": "cosine"}
-- Embedding model: "text-embedding-3-small" (do NOT use sentence-transformers)
+- Embedding model: SentenceTransformer("all-MiniLM-L6-v2") — local, no API key, 384-dim vectors (do NOT use openai.embeddings.create)
+- Gemini setup: genai.configure(api_key=os.environ["GEMINI_API_KEY"]); model = genai.GenerativeModel("gemini-1.5-flash")
 - Chunking: split each document string by "\n\n" (paragraph breaks), then apply a MAX_CHUNK_SIZE = 500 character limit (split further if a paragraph exceeds this). Filter out empty strings.
 - Chunk IDs must be deterministic: format "{doc_name}_chunk_{i}" (e.g., "refund_policy_chunk_0")
 - Function signatures required:
     def chunk_document(text: str, doc_name: str, max_chunk_size: int = 500) -> tuple[list[str], list[str]]: (returns chunk_texts, chunk_ids)
-    def embed_texts(texts: list[str]) -> list[list[float]]: (calls openai embeddings API, returns list of vectors)
+    def embed_texts(texts: list[str]) -> list[list[float]]: (calls SentenceTransformer("all-MiniLM-L6-v2").encode(texts).tolist(), returns list of 384-dim vectors)
     def init_knowledge_base() -> None: (called at startup — checks collection.count() > 0 to skip if already populated, otherwise embeds and upserts all documents)
-    def get_suggested_response(ticket_subject: str, ticket_description: str) -> dict: (embeds query, calls collection.query with n_results=3, constructs LLM prompt, calls openai.chat.completions.create with gpt-4o-mini and temperature=0.3, returns dict with keys "suggested_response" and "sources")
-- In the LLM prompt: system message instructs the assistant to answer only from the provided context; user message contains ticket text followed by 3 numbered context chunks
+    def get_suggested_response(ticket_subject: str, ticket_description: str) -> dict: (embeds query, calls collection.query with n_results=3, constructs LLM prompt, calls Gemini model.generate_content(prompt) with temperature=0.3, returns dict with keys "suggested_response" and "sources")
+- In the LLM prompt: combine system instructions and ticket text + numbered context chunks into a single prompt string for Gemini
 - The "sources" value in the returned dict must be the list of retrieved chunk IDs (not document names)
 
 FILE 3: app/routes/tickets.py — add to existing file
@@ -362,7 +368,7 @@ FILE 4: app/main.py — update startup
 
 Constraints and scope — do NOT generate the following:
 - LangChain or LangGraph imports of any kind
-- sentence-transformers library
+- openai library or openai.embeddings.create (use sentence-transformers instead)
 - PDF file loader or any file I/O for the knowledge base
 - multiple ChromaDB collections
 - re-ranking logic
@@ -373,7 +379,7 @@ Constraints and scope — do NOT generate the following:
 - refresh token logic
 
 Add clear inline comments in rag_service.py explaining each step of the pipeline.
-Use the existing openai client pattern from app/services/classifier.py (read that file first to match the client instantiation style).
+Use the existing Gemini client pattern from app/services/classifier.py (read that file first to match the genai.configure and GenerativeModel instantiation style).
 ```
 
 ---
@@ -407,11 +413,11 @@ I am getting a 500 Internal Server Error when hitting GET /tickets/{id}/suggeste
 
 The error in the terminal is:
 
-openai.BadRequestError: Error code: 400 - {'error': {'message': 'This model\'s maximum context length is 8192 tokens', 'type': 'invalid_request_error'}}
+google.api_core.exceptions.ResourceExhausted: 429 Quota exceeded (Gemini free tier 15 RPM limit)
 
 OR
 
-AttributeError: 'NoneType' object has no attribute 'embedding'
+AttributeError: 'numpy.ndarray' object has no attribute 'tolist' (or wrong shape from encode())
 
 OR
 
@@ -419,9 +425,9 @@ chromadb.errors.InvalidCollectionException: Collection support_kb does not exist
 
 Please diagnose and fix all three possible root causes:
 
-1. For the context length error: the retrieved chunks may be too long. Add a character truncation in the prompt construction step — limit each context chunk to 400 characters. Also enforce MAX_CHUNK_SIZE = 400 in the chunking function.
+1. For the Gemini rate limit error: add time.sleep(2) before the model.generate_content() call in get_suggested_response(). This respects the 15 RPM free tier limit during classroom demos.
 
-2. For the NoneType embedding error: an empty string is being passed to the embedding API. Add a filter step in embed_texts() that removes any empty or whitespace-only strings from the input list before calling the API.
+2. For the NumPy array error: ensure embed_texts() calls embedding_model.encode(texts).tolist() — the .tolist() call is required to convert the NumPy array to a plain Python list of lists before passing to ChromaDB. Also filter out empty or whitespace-only strings before calling encode().
 
 3. For the collection not found error: the collection is created at startup but the endpoint is being called before startup completes, OR the PersistentClient path is wrong. Add a module-level check at the start of get_suggested_response() that calls init_knowledge_base() if collection.count() == 0, as a safety fallback.
 
@@ -451,7 +457,7 @@ Finally, explain the data flowing through the system:
 - A query vector goes into collection.query — what does the response dict look like?
 - The retrieved chunks go into the LLM prompt — how are they formatted?
 
-Do not simplify for beginners. Use correct terminology: vector, cosine similarity, embedding dimension, upsert, collection, token limit.
+Do not simplify for beginners. Use correct terminology: vector, cosine similarity, embedding dimension, upsert, collection, token limit, NumPy array, encode().
 ```
 
 ---
@@ -469,7 +475,7 @@ Structure your response as:
 4. Trade-offs I made:
    - Why paragraph chunking over sentence chunking
    - Why ChromaDB over FAISS or Pinecone
-   - Why text-embedding-3-small over a local model
+   - Why all-MiniLM-L6-v2 (sentence-transformers, local) over a cloud embedding API
    - Why a static knowledge base over a dynamic document store
 5. What would change if this went to production with 100,000 documents
 6. A 3-sentence answer I can say out loud if asked "describe your RAG pipeline" with no time to think
@@ -488,7 +494,7 @@ Project context:
 - Tests live in tests/test_rag.py
 - The project uses FastAPI TestClient (or httpx AsyncClient)
 - Database uses SQLite in-memory for tests
-- OpenAI and ChromaDB calls should be mocked — do not make real API calls in tests
+- Gemini API and ChromaDB calls should be mocked — do not make real API calls in tests; sentence-transformers encode() should also be mocked to avoid downloading the model during test runs
 - Auth is required on the endpoint — generate a test JWT or mock get_current_user
 
 Tests to generate:
@@ -496,9 +502,9 @@ Tests to generate:
 1. test_chunk_document_basic — verify that a multi-paragraph string is split into correct number of chunks with correct IDs (e.g., "test_doc_chunk_0", "test_doc_chunk_1")
 2. test_chunk_document_long_paragraph — verify that a single paragraph exceeding MAX_CHUNK_SIZE is split into multiple sub-chunks
 3. test_chunk_document_empty_string — verify that empty strings are filtered out of chunk output
-4. test_embed_texts_calls_openai — mock openai.embeddings.create and verify it is called with the correct model ("text-embedding-3-small") and that the returned list has the right length
+4. test_embed_texts_returns_correct_shape — mock SentenceTransformer.encode to return a fake NumPy array of shape (2, 384) and verify embed_texts returns a list of 2 vectors each with 384 elements
 5. test_init_knowledge_base_skips_if_populated — mock collection.count() to return 10 and verify embed_texts is NOT called (idempotency check)
-6. test_get_suggested_response_returns_correct_shape — mock collection.query to return 3 fake chunks, mock openai.chat.completions.create to return a fake response, call get_suggested_response and assert the returned dict has keys "suggested_response" and "sources" with correct types
+6. test_get_suggested_response_returns_correct_shape — mock collection.query to return 3 fake chunks, mock Gemini model.generate_content to return a fake response with a .text attribute, call get_suggested_response and assert the returned dict has keys "suggested_response" and "sources" with correct types
 7. test_suggested_response_endpoint_200 — use TestClient to hit GET /tickets/{id}/suggested-response with a valid ticket ID and mocked RAG service, assert HTTP 200 and response body shape
 8. test_suggested_response_endpoint_404 — hit GET /tickets/9999/suggested-response and assert HTTP 404
 9. test_suggested_response_endpoint_401 — hit GET /tickets/{id}/suggested-response without Authorization header and assert HTTP 401
@@ -515,15 +521,15 @@ Add comprehensive error handling and edge case coverage to the RAG pipeline in a
 
 Handle these specific cases:
 
-1. OpenAI API key missing at startup: wrap the init_knowledge_base() call in a try/except openai.AuthenticationError block. Log the error with a clear message ("OPENAI_API_KEY is missing or invalid — knowledge base not initialised") and allow the server to start. The suggested-response endpoint should return HTTP 503 with detail "Knowledge base is not available" if the collection is empty.
+1. Gemini API key missing: sentence-transformers runs locally so the knowledge base will always initialise successfully. However, wrap the model.generate_content() call in a try/except and check for missing GEMINI_API_KEY at module load time. Log a clear message ("GEMINI_API_KEY is missing or invalid — generation will fail") and allow the server to start. The suggested-response endpoint should return HTTP 503 with detail "Generation service is not available" if the Gemini key is absent.
 
 2. Empty ticket description: if ticket.description is an empty string or None, construct the query using only ticket.subject. Do not send an empty string to the embeddings API.
 
 3. ChromaDB collection not found: if the collection does not exist when get_suggested_response is called (e.g., the chroma_db directory was deleted), catch chromadb.errors.InvalidCollectionException and raise HTTPException(status_code=503, detail="Knowledge base unavailable. Contact system administrator.").
 
-4. OpenAI rate limit during embedding: wrap the embed_texts() call in a retry with exponential backoff — attempt 3 times with waits of 1s, 2s, 4s before raising. Use time.sleep for simplicity (no extra libraries).
+4. Gemini rate limit during generation: the free tier allows 15 RPM. Wrap the model.generate_content() call in a retry with exponential backoff — attempt 3 times with waits of 1s, 2s, 4s before raising. Use time.sleep for simplicity (no extra libraries). Note: sentence-transformers embedding has no rate limit since it runs locally.
 
-5. LLM returns an empty response: if the chat completion response content is None or an empty string, return a default fallback: "Unable to generate a suggested response at this time. Please handle this ticket manually."
+5. LLM returns an empty response: if response.text is None or an empty string after model.generate_content(), return a default fallback: "Unable to generate a suggested response at this time. Please handle this ticket manually."
 
 6. Ticket with no subject: the classifier should have prevented this, but add a guard in get_suggested_response: if both subject and description are empty, raise ValueError("Cannot generate a suggested response for a ticket with no content").
 
@@ -554,5 +560,5 @@ After this session, you should be able to answer these questions without notes. 
 Use this in interviews when asked to describe what you built:
 
 ```text
-In Session 5, I added a RAG pipeline to the Support Ticket Copilot backend. The pipeline embeds a static knowledge base of support policy documents using OpenAI's text-embedding-3-small model and stores the vectors in a local persistent ChromaDB collection. When a support agent requests a suggested response for any ticket, the system embeds the ticket text, retrieves the top-3 semantically similar knowledge base chunks using cosine similarity, and injects those chunks as context into an OpenAI chat completion call. The result is a grounded suggested response that cites actual company policy rather than relying on the LLM's parametric memory. This is exposed via a GET /tickets/{id}/suggested-response endpoint protected by JWT auth.
+In Session 5, I added a RAG pipeline to the Support Ticket Copilot backend. The pipeline embeds a static knowledge base of support policy documents using the sentence-transformers all-MiniLM-L6-v2 model (local, 384-dimensional vectors, no API key) and stores the vectors in a local persistent ChromaDB collection. When a support agent requests a suggested response for any ticket, the system embeds the ticket text using the same local model, retrieves the top-3 semantically similar knowledge base chunks using cosine similarity, and injects those chunks as context into a Gemini 1.5 Flash chat completion call. The result is a grounded suggested response that cites actual company policy rather than relying on the LLM's parametric memory. This is exposed via a GET /tickets/{id}/suggested-response endpoint protected by JWT auth.
 ```

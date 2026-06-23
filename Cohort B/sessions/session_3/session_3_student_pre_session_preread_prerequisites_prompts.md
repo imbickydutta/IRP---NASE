@@ -12,7 +12,7 @@ By the end of all sessions, the system will:
 
 - accept ticket submissions from authenticated users
 - store tickets in a relational database
-- classify ticket category and priority using an OpenAI LLM call
+- classify ticket category and priority using a Gemini LLM call
 - search for similar past resolutions using embeddings + ChromaDB
 - suggest resolutions via RAG (Retrieval-Augmented Generation)
 - route complex tickets through a LangGraph resolution agent
@@ -74,7 +74,7 @@ Route Handler (app/routes/tickets.py or auth.py)
   ↓
 SQLModel Session (app/database.py) → SQLite DB  ← SESSION 2 ADDED THIS
   ↓
-[SESSION 4 WILL ADD: OpenAI API call for ticket classification]
+[SESSION 4 WILL ADD: Gemini API (gemini-1.5-flash) call for ticket classification]
   ↓
 [SESSION 5 WILL ADD: Embedding generation + ChromaDB vector search]
   ↓
@@ -210,7 +210,7 @@ then manually update the admin user's role in the DB or via a seeder script.)
 
 # Prompts for Session 3
 
-Use these prompts during the session when instructed. All prompts are written for Claude Code or Cursor AI.
+Use these prompts during the session when instructed. All prompts are written for Antigravity.
 
 ---
 

@@ -154,11 +154,11 @@ Why can't pytest catch a hallucination? Why can't a guardrail catch a regression
 
 ---
 
-## 20–35 min: Build the Feature Using Claude Code or Cursor AI
+## 20–35 min: Build the Feature Using Antigravity
 
 ### Instructor Goal
 
-Use Prompt 1 from the student pre-session file to generate the full feature using Claude Code or Cursor. Instructor runs this live on screen.
+Use Prompt 1 from the student pre-session file to generate the full feature using Antigravity. Instructor runs this live on screen.
 
 ### Pre-Prompt Checklist
 
@@ -224,7 +224,7 @@ Walk through every generated file and explain the technical reasoning behind eac
 
 ### Student Task
 
-Students run Prompt 1 from the pre-session file in their own Claude Code or Cursor environment and generate the same feature.
+Students run Prompt 1 from the pre-session file in their own Antigravity environment and generate the same feature.
 
 ### Instructor Support Areas
 
@@ -290,7 +290,7 @@ Add robustness to the new eval and guardrail code.
 1. `evaluate_groundedness` called with an empty `retrieved_chunks` list — should return `{"score": 0.0, "unsupported_sentences": [all sentences]}`
 2. `evaluate_groundedness` called with a single-word response — should not crash on sentence splitting
 3. Guardrail triggered by a partially unsafe response — the full response is blocked, not just the unsafe sentence
-4. Classifier test called when `OPENAI_API_KEY` is not set — should fail gracefully with a clear error, not a silent `None` return
+4. Classifier test called when `GEMINI_API_KEY` is not set — should fail gracefully with a clear error, not a silent `None` return
 5. `confidence_score` is `None` when ChromaDB returns zero results — handle with `score = 0.0` default
 6. TestClient sending a `POST /tickets` with an empty body — assert `422 Unprocessable Entity`
 7. TestClient sending a `GET /tickets/99999` where that ID does not exist — assert `404 Not Found`
@@ -410,7 +410,7 @@ Session 7 is the quality and safety session. Emphasize:
 
 7. **`confidence_score` is a ChromaDB distance, not a similarity** — ChromaDB with L2 distance returns lower values for more similar documents. Students may invert the interpretation. If using `cosine` metric, values closer to 1.0 are more similar. Clarify which metric the collection was created with in Session 5.
 
-8. **The classifier test calls the real OpenAI API** — if `OPENAI_API_KEY` is not set in the test environment, the test raises `openai.AuthenticationError`. Fix: either mock the OpenAI client with `unittest.mock.patch` or use `pytest.mark.skipif` when the key is not present.
+8. **The classifier test calls the real Gemini API** — if `GEMINI_API_KEY` is not set in the test environment, the test raises an authentication error. Fix: either mock the Gemini client with `unittest.mock.patch` or use `pytest.mark.skipif` when the key is not present.
 
 9. **`evaluate_groundedness` not called in any route** — students implement it but never wire it into the resolve endpoint or leave it only as a standalone script. Clarify that it is an offline eval function, not a per-request call, and show how to run it as a batch eval script.
 
@@ -490,13 +490,13 @@ The `evaluate_groundedness(response: str, retrieved_chunks: list[str]) -> dict` 
 
 Expected answer:
 
-The guardrail is added to the existing system prompt rather than as a separate LLM call to avoid the cost and latency of a second API call per user request. A separate LLM judge call would at least double the response latency and cost. Adding it to the system prompt means the same single LLM call handles both the response generation and the constraint following. The trade-off is that the guardrail is only as reliable as the LLM's instruction-following ability — a less capable model or an adversarially crafted user input may bypass the system prompt instructions. The post-processing check in the generate node provides a second layer of defense that does not rely on the LLM's compliance, but it requires manually defined trigger patterns which can miss novel violations. In production, a dedicated content moderation API (like OpenAI's moderation endpoint) would be the correct approach for the post-processing layer, giving deterministic pattern matching for known violation categories at very low cost.
+The guardrail is added to the existing system prompt rather than as a separate LLM call to avoid the cost and latency of a second API call per user request. A separate LLM judge call would at least double the response latency and cost. Adding it to the system prompt means the same single LLM call handles both the response generation and the constraint following. The trade-off is that the guardrail is only as reliable as the LLM's instruction-following ability — a less capable model or an adversarially crafted user input may bypass the system prompt instructions. The post-processing check in the generate node provides a second layer of defense that does not rely on the LLM's compliance, but it requires manually defined trigger patterns which can miss novel violations. In production, a dedicated content moderation API (like Google's Perspective API or a custom classifier) would be the correct approach for the post-processing layer, giving deterministic pattern matching for known violation categories at very low cost.
 
-### Q10. How would you mock the OpenAI client in `test_classifier.py` so the test does not make a real API call?
+### Q10. How would you mock the Gemini client in `test_classifier.py` so the test does not make a real API call?
 
 Expected answer:
 
-You would use `unittest.mock.patch` to replace the OpenAI client's `chat.completions.create` method with a mock that returns a pre-defined response object. The standard approach in pytest is to use the `monkeypatch` fixture or a `@patch` decorator. For example: `with patch("app.llm.classifier.client.chat.completions.create") as mock_create:` followed by `mock_create.return_value = MagicMock(choices=[MagicMock(message=MagicMock(content='{"category": "billing", "priority": "high", "summary": "test"}'))])`. The test then calls `classify_ticket(ticket_text)` and asserts the returned dictionary has the correct structure. This pattern tests the classifier's parsing and validation logic — the Pydantic model instantiation, the JSON parsing, the field value assertions — without calling the real API. The test is therefore fast, deterministic, and does not require a valid `OPENAI_API_KEY` in the test environment.
+You would use `unittest.mock.patch` to replace the Gemini client's `generate_content` method with a mock that returns a pre-defined response object. The standard approach in pytest is to use the `monkeypatch` fixture or a `@patch` decorator. For example: `with patch("app.llm.classifier.model.generate_content") as mock_generate:` followed by `mock_generate.return_value = MagicMock(text='{"category": "billing", "priority": "high", "summary": "test"}')`. The test then calls `classify_ticket(ticket_text)` and asserts the returned dictionary has the correct structure. This pattern tests the classifier's parsing and validation logic — the Pydantic model instantiation, the JSON parsing, the field value assertions — without calling the real API. The test is therefore fast, deterministic, and does not require a valid `GEMINI_API_KEY` in the test environment.
 
 ---
 
@@ -555,7 +555,7 @@ Students should complete the following by the end of the session:
 
 # Instructor Backup Plan
 
-If Claude Code / Cursor generation fails or takes too long during the live session:
+If Antigravity generation fails or takes too long during the live session:
 
 1. Instructor continues the live build on screen using the prompts manually, showing each file being created.
 2. Students follow conceptually and note the file structure and function signatures.

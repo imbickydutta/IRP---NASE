@@ -195,11 +195,11 @@ Route filters tickets by current_user.id (or all tickets if admin)
 
 ---
 
-## 20–35 min: Build the Feature Using Claude Code or Cursor AI
+## 20–35 min: Build the Feature Using Antigravity
 
 ### Instructor Goal
 
-Use the main build prompt from the student file to generate the full auth layer via Claude Code or Cursor.
+Use the main build prompt from the student file to generate the full auth layer via Antigravity.
 
 ### Pre-Prompt Checklist
 
@@ -252,7 +252,7 @@ Students must understand the generated code before they run it. This is the high
 
 ### Student Task
 
-Students run the main build prompt in their own Claude Code or Cursor session and build the auth layer on their existing Session 2 codebase.
+Students run the main build prompt in their own Antigravity session and build the auth layer on their existing Session 2 codebase.
 
 ### Instructor Support Areas
 
@@ -365,7 +365,7 @@ Use the interview questions section below. Run as a rapid-fire viva — one stud
 
 Today we added the security boundary. Our API now knows who is making each request and what they are allowed to do. Every future feature — the LLM classifier, the semantic search, the RAG agent — will operate within this boundary.
 
-In Session 4, we will add the first AI feature: an LLM-powered ticket classifier. When a ticket is created, we will send its title and description to the OpenAI API and automatically assign a category (billing, technical, account, general) and a priority (low, medium, high). The ticket will be classified at creation time and stored alongside the ticket record.
+In Session 4, we will add the first AI feature: an LLM-powered ticket classifier. When a ticket is created, we will send its title and description to the Gemini API (gemini-1.5-flash) and automatically assign a category (billing, technical, account, general) and a priority (low, medium, high). The ticket will be classified at creation time and stored alongside the ticket record.
 
 ---
 

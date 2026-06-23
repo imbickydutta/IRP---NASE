@@ -31,7 +31,7 @@ This project is an outstanding portfolio piece because it touches every layer of
 | Vector Store | ChromaDB | Embedding storage and semantic similarity search |
 | Embeddings | sentence-transformers | Local, offline-capable text embedding generation |
 | AI Workflow | LangGraph | Stateful agentic graph: classify → retrieve → respond → escalate |
-| LLM | OpenAI / Anthropic API | Resolution generation and LLM-as-judge evaluation |
+| LLM | Gemini API (gemini-1.5-flash) | Resolution generation and LLM-as-judge evaluation |
 | Testing | pytest + pytest-cov | Unit and integration test suite with coverage reporting |
 | Containerisation | Docker + docker-compose | Single-command local environment and deployment-ready packaging |
 | Logging | Python structlog | Structured, machine-readable application logs |
@@ -131,7 +131,7 @@ source .venv/bin/activate        # macOS / Linux
 pip install fastapi uvicorn sqlmodel alembic psycopg2-binary \
             python-jose[cryptography] passlib[bcrypt] \
             chromadb sentence-transformers \
-            langgraph openai \
+            langgraph google-generativeai \
             structlog pytest pytest-cov httpx python-dotenv
 pip freeze > requirements.txt
 ```
@@ -145,7 +145,7 @@ DATABASE_URL=postgresql://postgres:password@localhost:5432/support_copilot
 SECRET_KEY=your-jwt-secret-key-at-least-32-chars
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
-OPENAI_API_KEY=sk-...
+GEMINI_API_KEY=your-gemini-api-key-from-aistudio.google.com
 CHROMA_PERSIST_DIR=./chroma_db
 ```
 

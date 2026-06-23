@@ -127,10 +127,18 @@ Complete this before the live session:
 1. Make sure your AI Interview Prep Copilot app from Sessions 1 through 4 is working
 2. Confirm that Session 4's Question Generator is working and generating questions
 3. Have the app open and ready before class starts
-4. Prepare 2–3 sample answers to interview questions (one short answer, one detailed answer, one incorrect or incomplete answer — this helps you test the evaluator properly)
-5. Keep a sample interview question ready for manual entry testing
-6. Have your AI coding tool (Antigravity or equivalent) open and ready
-7. Keep this pre-session file open during the session for reference
+4. Set up the Gemini API for your React app (required for this session):
+   - Run in your project folder: `npm install @google/generative-ai`
+   - Create a `.env` file in your project root (same folder as `package.json`) and add: `VITE_GEMINI_API_KEY=your_key_here`
+   - Get your free API key at: aistudio.google.com (free Google account, no credit card needed)
+   - Replace `your_key_here` with the key you copied from AI Studio
+   - Restart your dev server (`npm run dev`) after adding the `.env` file
+   - Verify setup: temporarily add `console.log(import.meta.env.VITE_GEMINI_API_KEY)` at the top of your main component and check the browser console — you should see your key printed
+   - Remove that console.log line after confirming it works
+5. Prepare 2–3 sample answers to interview questions (one short answer, one detailed answer, one incorrect or incomplete answer — this helps you test the evaluator properly)
+6. Keep a sample interview question ready for manual entry testing
+7. Have your AI coding tool (Antigravity or equivalent) open and ready
+8. Keep this pre-session file open during the session for reference
 
 ## Optional Setup
 
@@ -239,7 +247,17 @@ Build the following feature and integrate it into the existing app:
    - Improved Answer: a better version of the student's answer
    - Follow-Up Question: one follow-up question an interviewer might ask based on this answer
 
-6. The evaluation function should build and send this rubric-based prompt to the AI:
+6. Use the Gemini API to send the evaluation prompt to AI:
+   - Package: @google/generative-ai (already installed in setup)
+   - API key: import.meta.env.VITE_GEMINI_API_KEY
+   - Model: gemini-1.5-flash
+   - Import: import { GoogleGenerativeAI } from "@google/generative-ai"
+   - Init: const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY)
+   - Get model: const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
+   - Call: const result = await model.generateContent(prompt); const text = result.response.text()
+   - For the structured JSON output version (Prompt 6), add generationConfig: { responseMimeType: "application/json", temperature: 0 }
+
+7. The evaluation function should build and send this rubric-based prompt to the AI:
 
 "You are an expert interview coach evaluating a candidate's answer to an interview question.
 
@@ -270,10 +288,10 @@ Improved Answer:
 Follow-Up Question:
 [write one follow-up question an interviewer would ask based on this answer]"
 
-7. An empty state when no evaluation has been submitted yet:
+8. An empty state when no evaluation has been submitted yet:
    - Show a message: "Submit your answer above to see your evaluation feedback."
 
-8. Do NOT add:
+9. Do NOT add:
    - Voice input or voice output
    - Timed interview mode
    - Multi-question sequential interview flow

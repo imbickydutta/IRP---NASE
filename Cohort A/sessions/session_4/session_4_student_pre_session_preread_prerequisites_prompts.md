@@ -122,6 +122,37 @@ Complete this before the live session:
 8. Keep a stable internet connection
 9. Keep Chrome or your default browser open for testing
 
+## Gemini API Setup (Required for Session 4)
+
+Session 4 adds an AI call to generate interview questions. You must have the Gemini API set up before the session.
+
+Steps:
+
+1. Install the Gemini package — run this in your project folder:
+   ```
+   npm install @google/generative-ai
+   ```
+
+2. Create a `.env` file in your project root (same folder as `package.json`) and add this line:
+   ```
+   VITE_GEMINI_API_KEY=your_key_here
+   ```
+
+3. Get your free API key from: **aistudio.google.com**
+   - Sign in with a Google account
+   - No credit card required
+   - Copy your API key and paste it in place of `your_key_here` in the `.env` file
+
+4. Verify it works — temporarily add this one line at the top of your main component:
+   ```
+   console.log(import.meta.env.VITE_GEMINI_API_KEY)
+   ```
+   Open your browser console. You should see your key printed. Remove this line after verifying.
+
+5. Restart your Vite dev server after adding the `.env` file (stop and run `npm run dev` again). Vite does not pick up new `.env` files without a restart.
+
+Note: The `VITE_` prefix is required. Without it, Vite will not expose the variable to the browser.
+
 ## Optional Setup
 
 Useful but not mandatory:
@@ -231,6 +262,10 @@ Feature behavior:
    - Match report: Match Band, Missing Skills list, Risk Areas list
 2. Build a chained context prompt that combines all three data sources into a single structured prompt
 3. Call AI with this chained prompt and ask it to generate:
+   - Use the Gemini API via @google/generative-ai npm package
+   - API key from: import.meta.env.VITE_GEMINI_API_KEY
+   - Model: gemini-1.5-flash
+   - For JSON output use responseMimeType: "application/json" in generationConfig
    - 5 technical questions (based on required skills and role type)
    - 3 project-based questions (based on the student's listed projects)
    - 2 HR questions (based on target role and profile)

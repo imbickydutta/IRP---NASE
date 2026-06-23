@@ -132,10 +132,17 @@ Complete this before the live session:
 1. Have the AI Interview Prep Copilot app from Session 5 open and working
 2. Verify that the app loads correctly in the browser
 3. Verify that at least the Profile Dashboard and Mock Evaluator from Session 5 are functional
-4. Have Google Antigravity or your AI coding tool open and ready
-5. Keep this file open during the session
-6. Have a stable internet connection
-7. Have at least 3 test questions ready to type into the Doubt Solver during the session
+4. Set up the Gemini API (required for the AI calls in this session):
+   - Run in your project folder: `npm install @google/generative-ai`
+   - Create a file named `.env` in your project root (same folder as `package.json`) and add this line:
+     `VITE_GEMINI_API_KEY=your_key_here`
+   - Get a free API key at: aistudio.google.com (free Google account, no credit card required)
+   - Verify the key is loading: temporarily add `console.log(import.meta.env.VITE_GEMINI_API_KEY)` at the top of your main component, run the app, and check the browser console — you should see your key. Remove this line after verifying.
+   - Restart the Vite dev server after creating the `.env` file (`Ctrl+C` then `npm run dev`)
+5. Have Google Antigravity or your AI coding tool open and ready
+6. Keep this file open during the session
+7. Have a stable internet connection
+8. Have at least 3 test questions ready to type into the Doubt Solver during the session
 
 ## Optional Setup
 
@@ -257,7 +264,11 @@ Step 4 — AI Call:
 When a relevant note is found:
 - Build a prompt in this format:
   "You are a helpful assistant. Use only the information provided below to answer the student's question. Do not use any outside knowledge or add information that is not in the provided note. Note Title: [note title]. Note Content: [note content]. Student Question: [user's question]. Answer:"
-- Send this prompt to the AI API
+- Send this prompt to the AI API using the following setup:
+  - Use the Gemini API via @google/generative-ai npm package
+  - API key from: import.meta.env.VITE_GEMINI_API_KEY
+  - Model: gemini-1.5-flash
+  - For JSON output use responseMimeType: "application/json" in generationConfig
 - Display the response as the answer
 
 When no relevant note is found:

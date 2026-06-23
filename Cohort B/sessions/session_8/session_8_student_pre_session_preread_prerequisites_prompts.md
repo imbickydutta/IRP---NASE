@@ -13,8 +13,8 @@ Here is the complete feature set by session:
 - Session 1: FastAPI CRUD API — POST/GET/PATCH for tickets
 - Session 2: SQLModel + SQLite data layer with ORM models
 - Session 3: JWT authentication and role-based access control
-- Session 4: LLM ticket classifier (OpenAI, gpt-4o-mini)
-- Session 5: RAG knowledge base using ChromaDB and OpenAI embeddings
+- Session 4: LLM ticket classifier (Gemini, gemini-1.5-flash)
+- Session 5: RAG knowledge base using ChromaDB and sentence-transformers embeddings
 - Session 6: LangGraph agentic workflow — classify, retrieve, suggest nodes
 - Session 7: pytest test suite, custom evals against a golden dataset, prompt-based guardrails
 - Session 8: Deploy to Railway, write README with architecture diagram, demo script, system design rehearsal
@@ -86,7 +86,7 @@ Guardrail Check (app/guardrails.py)                    [Session 7]
         |
         v
 LLM Ticket Classifier (app/classifier.py)              [Session 4]
-    OpenAI gpt-4o-mini → category: billing / technical / account / general
+    Gemini gemini-1.5-flash → category: billing / technical / account / general
         |
         v
 LangGraph Agent (app/graph.py)                         [Session 6]
@@ -95,12 +95,12 @@ LangGraph Agent (app/graph.py)                         [Session 6]
         |
         v
 RAG Retriever (app/knowledge_base.py)                  [Session 5]
-    Ticket description → OpenAI text-embedding-3-small → 1536-dim vector
+    Ticket description → sentence-transformers all-MiniLM-L6-v2 → 384-dim vector
     → ChromaDB cosine similarity search → top-3 relevant documents
         |
         v
 LLM Suggestion Generator                               [Session 6]
-    Retrieved context + ticket description → gpt-4o-mini → resolution suggestion
+    Retrieved context + ticket description → gemini-1.5-flash → resolution suggestion
         |
         v
 HTTP Response (JSON)
@@ -137,7 +137,7 @@ ChromaDB persists vector data to a local directory (e.g., `./chroma_db`). On Rai
 These terms will come up in interviews. Know what they mean in the context of your project specifically:
 
 - **Stateless server**: Your FastAPI server holds no session state in memory. Auth state is in the JWT token. This means you can run multiple server instances without sticky sessions.
-- **Bottleneck**: The LLM API call is the slowest part of the suggest pipeline — it adds 500ms to 2s of latency per request.
+- **Bottleneck**: The Gemini API call is the slowest part of the suggest pipeline — it adds 500ms to 2s of latency per request.
 - **Trade-off**: SQLite is simpler but cannot scale; PostgreSQL scales but requires infrastructure. This is a deliberate trade-off for a demo project.
 - **Vector similarity search**: ChromaDB converts the query into a vector and finds documents whose vectors are closest by cosine distance — not keyword match.
 - **Agentic workflow**: LangGraph routes between nodes based on state, unlike a linear chain that always runs the same steps.
@@ -208,11 +208,12 @@ sqlmodel
 python-jose[cryptography]
 passlib[bcrypt]
 python-dotenv
-openai
+google-generativeai
+sentence-transformers
 chromadb
 langchain
 langgraph
-langchain-openai
+langchain-google-genai
 pytest
 httpx
 ```
@@ -229,7 +230,7 @@ venv\Scripts\activate      # Windows
 Ensure your `.env` file has all required keys:
 
 ```
-OPENAI_API_KEY=sk-...
+GEMINI_API_KEY=your-gemini-api-key-here
 DATABASE_URL=sqlite:///./support.db
 SECRET_KEY=<random string, min 32 chars>
 ALGORITHM=HS256
@@ -271,7 +272,7 @@ Prepare these items in a text file or document before Session 8 starts:
    https://github.com/<your-username>/<repo-name>
 
 2. All environment variable keys your project uses (not the values):
-   OPENAI_API_KEY
+   GEMINI_API_KEY
    DATABASE_URL
    SECRET_KEY
    ALGORITHM
@@ -312,7 +313,7 @@ Prepare these items in a text file or document before Session 8 starts:
 
 # Prompts for Session 8
 
-Use these prompts in Claude Code or Cursor during the session when instructed. All prompts target an AI coding assistant — paste them as-is.
+Use these prompts in Antigravity during the session when instructed. All prompts target an AI coding assistant — paste them as-is.
 
 ---
 
@@ -324,7 +325,7 @@ The project is located in the current directory with this structure:
   app/main.py                   - FastAPI app entry point, registers all routers
   app/models.py                 - SQLModel models: Ticket, User
   app/auth.py                   - JWT authentication: token creation, get_current_user dependency
-  app/classifier.py             - LLM ticket classifier using OpenAI gpt-4o-mini
+  app/classifier.py             - LLM ticket classifier using Gemini gemini-1.5-flash
   app/knowledge_base.py         - ChromaDB collection setup, document ingestion, similarity search
   app/graph.py                  - LangGraph StateGraph: classify node, retrieve node, suggest node
   app/guardrails.py             - Prompt-based guardrail function to reject adversarial inputs
@@ -345,22 +346,22 @@ The API endpoints are:
   PATCH  /tickets/{ticket_id}/resolve  - Mark ticket as resolved (requires JWT)
 
 AI features used:
-  - LLM model: gpt-4o-mini (classification and suggestion generation)
-  - Embedding model: text-embedding-3-small (1536 dimensions) for RAG retrieval
+  - LLM model: gemini-1.5-flash (classification and suggestion generation)
+  - Embedding model: all-MiniLM-L6-v2 via sentence-transformers (384 dimensions) for RAG retrieval
   - Vector store: ChromaDB (local persistence)
   - Agent framework: LangGraph (StateGraph with classify, retrieve, suggest nodes)
   - Guardrails: prompt-based meta-classifier to reject off-topic or adversarial input
 
 Technology stack:
-  FastAPI, SQLModel, SQLite, python-jose (JWT), passlib (bcrypt), OpenAI Python SDK,
-  ChromaDB, LangChain, LangGraph, pytest, httpx, python-dotenv, uvicorn
+  FastAPI, SQLModel, SQLite, python-jose (JWT), passlib (bcrypt), google-generativeai,
+  sentence-transformers, ChromaDB, LangChain, LangGraph, pytest, httpx, python-dotenv, uvicorn
 
 Write a complete, professional README.md for this project. Include:
 
 1. Project title and one-paragraph description
 2. Architecture diagram — use Mermaid syntax (graph TD) showing all layers:
    Client → FastAPI → JWT Auth → Route Handler → SQLModel/SQLite → Guardrail →
-   LLM Classifier → LangGraph Agent → ChromaDB RAG → OpenAI API
+   LLM Classifier → LangGraph Agent → ChromaDB RAG → Gemini API (gemini-1.5-flash)
 3. API Reference table with columns: Method | Endpoint | Auth Required | Description
 4. Setup instructions — these must be exact and runnable:
    a. Clone the repo
@@ -407,8 +408,8 @@ Show every component that is touched when this endpoint is called:
 - Guardrail check (app/guardrails.py) — LLM meta-call
 - LangGraph agent invocation (app/graph.py)
 - Inside LangGraph: classify node → retrieve node → suggest node
-- In retrieve node: OpenAI embeddings API call → ChromaDB similarity query
-- In suggest node: OpenAI chat completion call with retrieved context
+- In retrieve node: sentence-transformers local embedding → ChromaDB similarity query
+- In suggest node: Gemini generate_content call with retrieved context
 - Return suggestion string in JSON response
 
 Use this arrow format:
@@ -422,8 +423,8 @@ Show which files import which files using arrows:
 app/main.py → app/routes/tickets.py, app/routes/users.py
 app/routes/tickets.py → app/models.py, app/auth.py, app/classifier.py, app/graph.py, app/guardrails.py
 app/graph.py → app/knowledge_base.py
-app/knowledge_base.py → chromadb, openai
-app/classifier.py → openai
+app/knowledge_base.py → chromadb, sentence-transformers
+app/classifier.py → google-generativeai
 app/auth.py → app/models.py, python-jose, passlib
 
 Format as a clean text block suitable for a GitHub README.
@@ -446,7 +447,7 @@ Project details:
 - All configuration is via environment variables loaded from .env using python-dotenv
 
 Required environment variables to set in Railway dashboard:
-  OPENAI_API_KEY
+  GEMINI_API_KEY
   DATABASE_URL=sqlite:///./support.db
   SECRET_KEY
   ALGORITHM=HS256
@@ -537,8 +538,8 @@ I built this system:
 - FastAPI backend for AI-powered customer support ticket resolution
 - JWT auth with role-based access (agent and admin roles)
 - SQLModel with SQLite for ticket and user persistence
-- LLM ticket classifier using OpenAI gpt-4o-mini
-- RAG pipeline: ticket description → text-embedding-3-small → ChromaDB cosine similarity → top-3 documents → injected as LLM context
+- LLM ticket classifier using Gemini gemini-1.5-flash
+- RAG pipeline: ticket description → all-MiniLM-L6-v2 (sentence-transformers) → ChromaDB cosine similarity → top-3 documents → injected as LLM context
 - LangGraph StateGraph with 3 nodes: classify node, retrieve node, suggest node
 - Prompt-based guardrail that rejects adversarial or off-topic inputs before LLM calls
 - pytest test suite with fixtures, test DB, and custom eval runner
@@ -568,13 +569,13 @@ Length: approximately 3 minutes when spoken aloud (400-500 words).
 I am preparing for a technical interview. I built this FastAPI backend:
 "AI Support Ticket Resolution Copilot"
 
-Stack: FastAPI, SQLModel, SQLite, JWT (python-jose), passlib (bcrypt), OpenAI (gpt-4o-mini, text-embedding-3-small), ChromaDB, LangGraph, LangChain, pytest, httpx, python-dotenv, uvicorn, Railway deployment.
+Stack: FastAPI, SQLModel, SQLite, JWT (python-jose), passlib (bcrypt), Gemini (gemini-1.5-flash), sentence-transformers (all-MiniLM-L6-v2), ChromaDB, LangGraph, LangChain, pytest, httpx, python-dotenv, uvicorn, Railway deployment.
 
 Generate 15 technical viva questions with detailed model answers.
 
 Questions must cover:
 - Q1–Q4: Basic project understanding (what it does, who uses it, why each component)
-- Q5–Q8: Code-level implementation details (specific to FastAPI, SQLModel, JWT, OpenAI SDK)
+- Q5–Q8: Code-level implementation details (specific to FastAPI, SQLModel, JWT, Gemini SDK)
 - Q9–Q11: AI/ML concepts applied to this project (RAG, embeddings, LangGraph nodes)
 - Q12–Q13: System design and trade-offs (scalability, bottlenecks, production readiness)
 - Q14–Q15: Debugging and error handling (specific FastAPI/Python errors)
@@ -586,7 +587,7 @@ For each question:
 Include questions about:
 - What happens when the JWT token is expired (which exception, which HTTP status)
 - Why bcrypt is used instead of MD5 or SHA-256 for password hashing
-- What the 1536 in text-embedding-3-small represents
+- What the 384 in all-MiniLM-L6-v2 (sentence-transformers) represents
 - What `check_same_thread=False` does in SQLite connection args
 - How LangGraph state is passed between nodes
 - What a 422 Unprocessable Entity means in FastAPI
@@ -612,7 +613,7 @@ Check for the following issues and list findings with file name and line referen
 
 1. Hardcoded secrets or API keys (any string that looks like a key not loaded from os.environ)
 2. Missing error handling:
-   - OpenAI API calls with no try/except around openai.APIError or openai.RateLimitError
+   - Gemini API calls with no try/except around google.api_core.exceptions.GoogleAPIError or ResourceExhausted
    - ChromaDB queries with no fallback for empty results
    - SQLModel queries that assume a record exists without checking for None
 3. Security issues:
@@ -662,9 +663,9 @@ Prepare this explanation. You should be able to say this from memory in a techni
 I built an AI Support Ticket Resolution Copilot using FastAPI as the backend framework
 with SQLModel for the data layer and JWT for authentication. The system takes customer
 support tickets and runs them through a LangGraph agentic workflow: a classify node
-calls gpt-4o-mini to label the ticket category, a retrieve node embeds the ticket
-description using text-embedding-3-small and queries ChromaDB for the most relevant
-knowledge base documents, and a suggest node passes the retrieved context to gpt-4o-mini
+calls gemini-1.5-flash to label the ticket category, a retrieve node embeds the ticket
+description using all-MiniLM-L6-v2 (sentence-transformers) and queries ChromaDB for the most relevant
+knowledge base documents, and a suggest node passes the retrieved context to gemini-1.5-flash
 to generate a resolution suggestion. A prompt-based guardrail filters adversarial inputs
 before any LLM call. The system is deployed on Railway with pytest test coverage and a
 custom eval runner that measures classification accuracy against a golden dataset.

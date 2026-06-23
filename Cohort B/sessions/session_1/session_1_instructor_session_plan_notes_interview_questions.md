@@ -20,7 +20,7 @@ This backend becomes the foundation for every subsequent session:
 
 - Session 2 will replace in-memory storage with SQLModel + SQLite/PostgreSQL
 - Session 3 will add JWT authentication middleware
-- Session 4 will add OpenAI-powered auto-categorization
+- Session 4 will add Gemini-powered auto-categorization
 - Session 5 will add embeddings + ChromaDB for semantic search
 - Session 6 will add LangChain RAG for solution retrieval
 - Session 7 will add a LangGraph agent for autonomous ticket resolution
@@ -72,7 +72,7 @@ All endpoints must be testable through Swagger at `http://localhost:8000/docs`.
 
 - Any database (SQLite, PostgreSQL, SQLModel) — that is Session 2
 - Any authentication or JWT tokens — that is Session 3
-- Any OpenAI or LLM calls — that is Session 4
+- Any Gemini or LLM calls — that is Session 4
 - Any ChromaDB or vector embeddings — that is Session 5
 - Background tasks (`BackgroundTasks`) — out of scope for Session 1
 - WebSockets — out of scope
@@ -99,7 +99,7 @@ This session covers no AI. That is intentional. Production AI systems are built 
 
 ## Key Philosophy
 
-Students at this stage know Python. They know FastAPI exists. What they often lack is the discipline to build a clean, well-structured API before adding features. The AI coding tools (Claude Code, Cursor) are powerful but will happily generate bloated, scope-creeping code if not given tight constraints.
+Students at this stage know Python. They know FastAPI exists. What they often lack is the discipline to build a clean, well-structured API before adding features. The AI coding tools (Antigravity) are powerful but will happily generate bloated, scope-creeping code if not given tight constraints.
 
 The job of the instructor in Session 1 is:
 
@@ -129,7 +129,7 @@ The final application will include:
 - REST API for ticket CRUD
 - PostgreSQL database with SQLModel
 - JWT authentication
-- OpenAI-powered auto-categorization
+- Gemini-powered auto-categorization
 - Semantic search with ChromaDB embeddings
 - LangChain RAG for solution lookup
 - LangGraph agent for autonomous resolution
@@ -198,7 +198,7 @@ This builds architectural intuition before any code is generated.
 
 ---
 
-## 20–35 min: Build the Feature Using Claude Code or Cursor
+## 20–35 min: Build the Feature Using Antigravity
 
 ### Instructor Goal
 
@@ -206,7 +206,7 @@ Demonstrate the correct way to use an AI coding tool — give it precise, scoped
 
 ### Live Demonstration
 
-Open Claude Code or Cursor in the `ai-support-copilot` directory. Use the Main Build Prompt from the student pre-session file. Paste the prompt, run generation, and narrate your observations aloud:
+Open Antigravity in the `ai-support-copilot` directory. Use the Main Build Prompt from the student pre-session file. Paste the prompt, run generation, and narrate your observations aloud:
 
 - Does it create the correct file structure (`main.py`, `models.py`, `routes/tickets.py`)?
 - Does it use `APIRouter` or put everything in `main.py`?
@@ -266,7 +266,7 @@ Every student must understand what was generated before they build their own ver
 
 ### Student Task
 
-Students run the Main Build Prompt (Prompt 1 from the student pre-session file) in Claude Code or Cursor inside their own `ai-support-copilot` project directory. They should then start the server and verify Swagger loads at `http://localhost:8000/docs`.
+Students run the Main Build Prompt (Prompt 1 from the student pre-session file) in Antigravity inside their own `ai-support-copilot` project directory. They should then start the server and verify Swagger loads at `http://localhost:8000/docs`.
 
 ### Instructor Support Areas
 
@@ -595,7 +595,7 @@ Students should meet all of the following by the end of the session:
 
 # Instructor Backup Plan
 
-If Claude Code or Cursor generation fails or produces severely out-of-scope code:
+If Antigravity generation fails or produces severely out-of-scope code:
 
 1. Instructor continues live build on screen, typing code manually or using a pre-prepared reference implementation.
 2. Students follow conceptually and take notes on the architecture diagram.

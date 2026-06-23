@@ -145,6 +145,26 @@ Complete this before the live session:
 7. Keep this pre-session file open during the session
 8. Keep a stable internet connection
 
+### Gemini API Setup (required for Session 3)
+
+Session 3 calls the Gemini API directly from the browser. Complete these steps before class:
+
+1. Install the package: run `npm install @google/generative-ai` in your project folder
+2. Get a free API key from aistudio.google.com (free Google account, no credit card required)
+3. Create a `.env` file in your project root (same folder as `package.json`) and add this line:
+   ```
+   VITE_GEMINI_API_KEY=your_key_here
+   ```
+   Replace `your_key_here` with the key you copied from aistudio.google.com
+4. Restart your Vite dev server after adding the `.env` file (`npm run dev`)
+5. Verify the key is loading: temporarily add this line at the top of your main component and check the browser console:
+   ```
+   console.log(import.meta.env.VITE_GEMINI_API_KEY)
+   ```
+   You should see your key printed. Remove this line after verifying.
+
+Note: the `VITE_` prefix is required for Vite to expose the variable to the browser. This is acceptable for classroom use. Do not use this pattern in production apps.
+
 ## Optional Setup
 
 Useful but not mandatory:
@@ -278,6 +298,12 @@ Build the following:
 7. Add a disclaimer at the bottom of the report card:
    "This report is AI-generated. Use it as a guide, not a guarantee."
 8. Show an error message if the AI call fails: "Unable to generate match report. Please try again."
+
+Use the following for the AI call:
+- Use the Gemini API via the @google/generative-ai npm package
+- API key from: import.meta.env.VITE_GEMINI_API_KEY
+- Model: gemini-1.5-flash
+- For JSON output use responseMimeType: "application/json" in generationConfig
 
 Do NOT add:
 - ATS scores or hiring percentage numbers
