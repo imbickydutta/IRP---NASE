@@ -1,1 +1,16 @@
 /.DS_Store
+
+# Syllabus generator script
+generate_syllabi.py
+
+# QC folders (internal use only)
+Cohort A/qc/
+Cohort B/qc/
+Cohort C/qc/
+
+# Generated PDFs (shared as attachments, not via git)
+*.pdf
+
+# Python cache
+__pycache__/
+*.pyc
