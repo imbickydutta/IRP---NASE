@@ -8,8 +8,6 @@ Cohort A/qc/
 Cohort B/qc/
 Cohort C/qc/
 
-# Generated PDFs (shared as attachments, not via git)
-*.pdf
 
 # Instructor emails (shared privately, not via git)
 emails/
